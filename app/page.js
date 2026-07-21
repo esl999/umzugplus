@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { supabase } from "./lib/supabaseClient";
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -133,9 +134,51 @@ export default function Home() {
   const [gegenstaende, setGegenstaende] = useState({});
   const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [prices, setPrices] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+  const [sendError, setSendError] = useState("");
+
+  useEffect(() => {
+    async function loadPrices() {
+      const { data } = await supabase.from("price_settings").select("*");
+      if (data) {
+        const map = {};
+        data.forEach((row) => {
+          map[row.key] = row;
+        });
+        setPrices(map);
+      }
+    }
+    loadPrices();
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user?.email) setContactEmail(data.session.user.email);
+    });
+  }, []);
+
+  function computePrice() {
+    if (!prices || !result) return null;
+    let sum = 0;
+
+    if (berechnungsart === "flaeche") {
+      sum += (Number(flaeche) || 0) * (prices.proQm?.price || 0);
+    } else {
+      moebelListe.forEach((m) => {
+        sum += (gegenstaende[m.key] || 0) * (prices[m.key]?.price || 0);
+      });
+    }
+
+    sum += (Number(result.km) || 0) * (prices.proKm?.price || 0);
+    if (!vonAufzug) sum += Number(etageVon) * (prices.proEtage?.price || 0);
+    if (!nachAufzug) sum += Number(etageNach) * (prices.proEtage?.price || 0);
+
+    return Math.round(sum);
+  }
 
   function changeQty(key, delta) {
     setGegenstaende((prev) => {
@@ -174,51 +217,43 @@ export default function Home() {
     }
   }
 
-  function buildMailto() {
-    const lines = [
-      `Kundentyp: ${kundentyp === "gewerbe" ? "Gewerbekunde" : "Privatkunde"}`,
-      `Von: ${von}`,
-      `Nach: ${nach}`,
-      `Entfernung (Luftlinie): ${result?.km ?? "-"} km`,
-      `Etage Auszug: ${etagenOptions.find((o) => o.value === etageVon)?.label} · Aufzug: ${vonAufzug ? "ja" : "nein"}`,
-      `Etage Einzug: ${etagenOptions.find((o) => o.value === etageNach)?.label} · Aufzug: ${nachAufzug ? "ja" : "nein"}`,
-    ];
+  async function handleSendRequest() {
+    setSendError("");
+    setSending(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user?.id || null;
 
-    if (berechnungsart === "flaeche") {
-      lines.push(`Berechnung anhand Wohnfläche: ${flaeche || "-"} m²`);
-    } else {
-      const ausgewaehlt = moebelListe
-        .filter((m) => (gegenstaende[m.key] || 0) > 0)
-        .map((m) => `${gegenstaende[m.key]}x ${m.label}`)
-        .join(", ");
-      lines.push(`Ausgewählte Gegenstände: ${ausgewaehlt || "keine Angabe"}`);
+      const { error: insertError } = await supabase.from("anfragen").insert({
+        user_id: userId,
+        kundentyp,
+        von,
+        nach,
+        entfernung_km: Number(result.km),
+        etage_von: etageVon,
+        etage_nach: etageNach,
+        aufzug_von: vonAufzug,
+        aufzug_nach: nachAufzug,
+        berechnungsart,
+        flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
+        gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
+        geschaetzter_preis: computePrice(),
+        name: name || null,
+        email: contactEmail || null,
+        telefon: telefon || null,
+      });
+
+      if (insertError) throw insertError;
+      setSendSuccess(true);
+    } catch (err) {
+      setSendError("Die Anfrage konnte nicht gesendet werden. Bitte versuch es erneut.");
+    } finally {
+      setSending(false);
     }
-
-    if (name) lines.push(`Name: ${name}`);
-    if (telefon) lines.push(`Telefon: ${telefon}`);
-
-    const subject = `Umzugsanfrage über UmzugPlus`;
-    const body = encodeURIComponent(lines.join("\n"));
-    return `mailto:info@umzugplus.de?subject=${encodeURIComponent(subject)}&body=${body}`;
   }
 
   return (
     <>
-      <nav className="topnav">
-        <div className="nav-inner">
-          <div className="logo">
-            <span className="dot" />
-            Umzug<span className="plus">Plus</span>
-          </div>
-          <ul className="nav-links">
-            <li><a href="#rechner">Rechner</a></li>
-            <li><a href="#leistungen">Leistungen</a></li>
-            <li><a href="#kontakt">Kontakt</a></li>
-          </ul>
-          <a className="nav-cta" href="#kontakt">Angebot anfragen</a>
-        </div>
-      </nav>
-
       <header className="hero">
         <div className="wrap">
           <span className="badge">● Kostenlos &amp; unverbindlich</span>
@@ -424,36 +459,69 @@ export default function Home() {
                     melden wir uns persönlich bei Ihnen.
                   </div>
 
-                  <div className="contact-box">
-                    <div className="contact-title">Unverbindliche Anfrage senden</div>
-                    <div className="calc-row-3">
-                      <div className="field">
-                        <label htmlFor="name">Name (optional)</label>
-                        <input
-                          id="name"
-                          type="text"
-                          placeholder="Dein Name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <label htmlFor="telefon">Telefon (optional)</label>
-                        <input
-                          id="telefon"
-                          type="text"
-                          placeholder="Für Rückruf"
-                          value={telefon}
-                          onChange={(e) => setTelefon(e.target.value)}
-                        />
-                      </div>
-                      <div className="field">
-                        <label>&nbsp;</label>
-                        <a className="btn primary" href={buildMailto()} style={{ textAlign: "center" }}>
-                          Anfrage per E-Mail senden
-                        </a>
+                  {prices && (
+                    <div className="price-highlight">
+                      <div className="k">Geschätzter Richtpreis</div>
+                      <div className="v">{computePrice()} €</div>
+                      <div className="note-inline">
+                        Unverbindliche Schätzung, kein Festpreis.
                       </div>
                     </div>
+                  )}
+
+                  <div className="contact-box">
+                    <div className="contact-title">Unverbindliche Anfrage senden</div>
+                    {sendSuccess ? (
+                      <div className="send-success">
+                        Danke! Deine Anfrage ist bei uns eingegangen — wir melden
+                        uns zeitnah bei dir.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="calc-row-3">
+                          <div className="field">
+                            <label htmlFor="name">Name (optional)</label>
+                            <input
+                              id="name"
+                              type="text"
+                              placeholder="Dein Name"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                            />
+                          </div>
+                          <div className="field">
+                            <label htmlFor="contactEmail">E-Mail (optional)</label>
+                            <input
+                              id="contactEmail"
+                              type="email"
+                              placeholder="Für Rückmeldung"
+                              value={contactEmail}
+                              onChange={(e) => setContactEmail(e.target.value)}
+                            />
+                          </div>
+                          <div className="field">
+                            <label htmlFor="telefon">Telefon (optional)</label>
+                            <input
+                              id="telefon"
+                              type="text"
+                              placeholder="Für Rückruf"
+                              value={telefon}
+                              onChange={(e) => setTelefon(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="calc-submit"
+                          style={{ marginTop: 16 }}
+                          disabled={sending}
+                          onClick={handleSendRequest}
+                        >
+                          {sending ? "Sende…" : "Unverbindliche Anfrage senden"}
+                        </button>
+                        {sendError && <div className="calc-error">{sendError}</div>}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
