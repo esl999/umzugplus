@@ -1,5 +1,6 @@
 import "./globals.css";
 import Navbar from "./components/Navbar";
+import ChatWidget from "./components/ChatWidget";
 
 export const metadata = {
   title: "UmzugPlus — Ihr Umzug. Einfach organisiert.",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }) {
       <body>
         <Navbar />
         {children}
+        <ChatWidget />
       </body>
     </html>
   );
