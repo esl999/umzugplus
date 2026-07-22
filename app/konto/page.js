@@ -12,6 +12,10 @@ export default function KontoPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [strasse, setStrasse] = useState("");
+  const [hausnummer, setHausnummer] = useState("");
+  const [plz, setPlz] = useState("");
+  const [stadt, setStadt] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -25,6 +29,10 @@ export default function KontoPage() {
     if (profile) {
       setName(profile.name || "");
       setPhone(profile.phone || "");
+      setStrasse(profile.adresse_strasse || "");
+      setHausnummer(profile.adresse_hausnummer || "");
+      setPlz(profile.adresse_plz || "");
+      setStadt(profile.adresse_stadt || "");
     }
   }, [profile]);
 
@@ -34,7 +42,14 @@ export default function KontoPage() {
     setSaved(false);
     await supabase
       .from("profiles")
-      .update({ name, phone })
+      .update({
+        name,
+        phone,
+        adresse_strasse: strasse,
+        adresse_hausnummer: hausnummer,
+        adresse_plz: plz,
+        adresse_stadt: stadt,
+      })
       .eq("id", session.user.id);
     setSaving(false);
     setSaved(true);
@@ -51,7 +66,7 @@ export default function KontoPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-card" style={{ maxWidth: 640 }}>
         <h1>Mein Konto</h1>
         <p className="auth-sub">Deine Kontodaten im Überblick.</p>
 
@@ -80,6 +95,25 @@ export default function KontoPage() {
               onChange={(e) => setPhone(e.target.value)}
               placeholder="Deine Telefonnummer"
             />
+          </div>
+
+          <div className="calc-row-3" style={{ marginTop: 14 }}>
+            <div className="field">
+              <label htmlFor="strasse">Straße</label>
+              <input id="strasse" type="text" value={strasse} onChange={(e) => setStrasse(e.target.value)} placeholder="Musterstraße" />
+            </div>
+            <div className="field">
+              <label htmlFor="hausnummer">Hausnummer</label>
+              <input id="hausnummer" type="text" value={hausnummer} onChange={(e) => setHausnummer(e.target.value)} placeholder="12" />
+            </div>
+            <div className="field">
+              <label htmlFor="plz">Postleitzahl</label>
+              <input id="plz" type="text" value={plz} onChange={(e) => setPlz(e.target.value)} placeholder="58135" />
+            </div>
+          </div>
+          <div className="field" style={{ marginTop: 14, maxWidth: 260 }}>
+            <label htmlFor="stadt">Stadt</label>
+            <input id="stadt" type="text" value={stadt} onChange={(e) => setStadt(e.target.value)} placeholder="Hagen" />
           </div>
 
           <button className="calc-submit" style={{ marginTop: 20 }} disabled={saving}>

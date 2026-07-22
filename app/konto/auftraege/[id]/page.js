@@ -13,12 +13,25 @@ const statusLabel = {
   abgeschlossen: "Abgeschlossen",
 };
 
-const belegTypes = [
-  { key: "angebot", label: "Angebot" },
-  { key: "auftragsbestaetigung", label: "Auftragsbestätigung" },
-  { key: "rechnung", label: "Rechnung" },
-  { key: "zahlungsbestaetigung", label: "Zahlungsbestätigung" },
-];
+function getAvailableBelege(order) {
+  const gesamt = order.geschaetzter_preis || 0;
+  const bezahlt = order.bezahlt_betrag || 0;
+  const list = [{ key: "angebot", label: "Angebot" }];
+
+  if (order.status === "bestaetigt" || order.status === "abgeschlossen") {
+    list.push({ key: "auftragsbestaetigung", label: "Auftragsbestätigung" });
+  }
+  if (bezahlt > 0 && bezahlt < gesamt) {
+    list.push({ key: "anzahlungsbestaetigung", label: "Anzahlungsbeleg" });
+  }
+  if (gesamt > 0 && bezahlt >= gesamt) {
+    list.push({ key: "rechnung", label: "Rechnung" });
+  }
+  if (order.status === "storniert") {
+    list.push({ key: "storno", label: "Storno-Dokument" });
+  }
+  return list;
+}
 
 export default function AuftragDetail() {
   const { session, loading } = useAuth();
@@ -71,10 +84,11 @@ export default function AuftragDetail() {
   }
 
   async function handleCancel() {
-    if (!confirm("Möchtest du diesen Auftrag wirklich stornieren?")) return;
+    if (!confirm("Möchtest du diesen Auftrag wirklich stornieren? Bitte beachte die Stornobedingungen (siehe Auftragsbestätigung).")) return;
     setCanceling(true);
-    await supabase.from("anfragen").update({ status: "storniert" }).eq("id", order.id);
-    setOrder({ ...order, status: "storniert" });
+    const now = new Date().toISOString();
+    await supabase.from("anfragen").update({ status: "storniert", storniert_at: now }).eq("id", order.id);
+    setOrder({ ...order, status: "storniert", storniert_at: now });
     setCanceling(false);
   }
 
@@ -222,7 +236,7 @@ export default function AuftragDetail() {
           </div>
 
           <div style={{ padding: 20, display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {belegTypes.map((b) => (
+            {getAvailableBelege(order).map((b) => (
               <Link key={b.key} className="small-btn" href={`/konto/auftraege/${order.id}/beleg/${b.key}`}>
                 {b.label}
               </Link>

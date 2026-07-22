@@ -17,12 +17,17 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 async function geocode(query) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q=${encodeURIComponent(query)}`;
   const res = await fetch(url, { headers: { "Accept-Language": "de" } });
   if (!res.ok) throw new Error("Geocoding fehlgeschlagen");
   const data = await res.json();
   if (!data || data.length === 0) throw new Error("not_found");
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  return {
+    lat: parseFloat(data[0].lat),
+    lon: parseFloat(data[0].lon),
+    state: data[0].address?.state || "",
+    country: data[0].address?.country || "",
+  };
 }
 
 const etagenOptions = [
@@ -114,6 +119,7 @@ export default function Home() {
   const [flaeche, setFlaeche] = useState("");
   const [gegenstaende, setGegenstaende] = useState({});
   const [zusatz, setZusatz] = useState({ moebelAbbau: false, moebelEinbau: false, verpackungsservice: false, halteverbotszone: false });
+  const [mitarbeiter, setMitarbeiter] = useState(2);
   const [sonstiges, setSonstiges] = useState("");
   const [rabattcodeInput, setRabattcodeInput] = useState("");
   const [wunschtermin, setWunschtermin] = useState("");
@@ -203,7 +209,9 @@ export default function Home() {
       zusatzLabels.push(`Transportversicherung (${prices.transportversicherung.price}%)`);
     }
 
-    let netto = grundpreis + umfang + etagenzuschlag + transport + zusatzSumme;
+    const mitarbeiterAufpreis = mitarbeiter === 3 ? prices.mitarbeiter3Aufpreis.price : 0;
+
+    let netto = grundpreis + umfang + etagenzuschlag + transport + zusatzSumme + mitarbeiterAufpreis;
 
     if (kundentyp === "gewerbe") {
       netto = netto * (1 - prices.rabattGewerbe.price / 100);
@@ -222,7 +230,7 @@ export default function Home() {
 
     return {
       grundpreis, umfang, umfangLabel, etagenOhneAufzug, etagenzuschlag,
-      km, fernumzug, transport, zusatzSumme, zusatzLabels, rabattBetrag,
+      km, fernumzug, transport, zusatzSumme, zusatzLabels, rabattBetrag, mitarbeiterAufpreis,
       netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt,
       anzahlung, bezahlt: 0, offen: gesamt,
     };
@@ -247,7 +255,26 @@ export default function Home() {
       let km = 0;
       if (leistung === "umzug") {
         const [a, b] = await Promise.all([geocode(von), geocode(nach)]);
+
+        if (!a.state.includes("Nordrhein-Westfalen")) {
+          setError("Der Startpunkt (Von) muss in Nordrhein-Westfalen liegen. Der Zielort kann deutschlandweit sein.");
+          setLoading(false);
+          return;
+        }
+        if (!b.country.includes("Deutschland")) {
+          setError("Der Zielort (Nach) muss in Deutschland liegen.");
+          setLoading(false);
+          return;
+        }
+
         km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+      } else {
+        const obj = await geocode(objektAdresse);
+        if (!obj.state.includes("Nordrhein-Westfalen")) {
+          setError("Die Objekt-Adresse muss in Nordrhein-Westfalen liegen.");
+          setLoading(false);
+          return;
+        }
       }
 
       let rabatt = null;
@@ -279,6 +306,19 @@ export default function Home() {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id || null;
 
+      if (userId) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("status")
+          .eq("id", userId)
+          .single();
+        if (profileData?.status === "suspended") {
+          setSendError("Dein Konto wurde vom Team gesperrt. Bitte kontaktiere uns, falls du Fragen dazu hast.");
+          setSending(false);
+          return;
+        }
+      }
+
       const { error: insertError } = await supabase.from("anfragen").insert({
         user_id: userId,
         kundentyp,
@@ -295,6 +335,7 @@ export default function Home() {
         flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
         gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
         zusatzleistungen: zusatz,
+        mitarbeiter,
         wunschtermin: wunschtermin || null,
         rabattcode: result.rabatt ? result.rabatt.code : null,
         geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
@@ -368,8 +409,11 @@ export default function Home() {
               <form onSubmit={handleCalculate}>
                 {leistung === "umzug" ? (
                   <>
+                    <p className="mini-note" style={{ marginBottom: 12 }}>
+                      Wir starten aktuell nur aus Nordrhein-Westfalen — dein Zielort kann deutschlandweit liegen.
+                    </p>
                     <div className="calc-grid">
-                      <AddressField id="von" label="Von (Auszug)" placeholder="z.B. Musterstraße 1, Hagen" value={von} onChange={setVon} />
+                      <AddressField id="von" label="Von (Auszug, NRW)" placeholder="z.B. Musterstraße 1, Hagen" value={von} onChange={setVon} />
                       <AddressField id="nach" label="Nach (Einzug)" placeholder="z.B. Domplatz 1, Köln" value={nach} onChange={setNach} />
                     </div>
                     <div className="calc-row-3">
@@ -395,7 +439,10 @@ export default function Home() {
                   </>
                 ) : (
                   <div className="calc-grid">
-                    <AddressField id="objekt" label="Objekt-Adresse" placeholder="Adresse in Deutschland suchen…" value={objektAdresse} onChange={setObjektAdresse} />
+                    <p className="mini-note" style={{ gridColumn: "1 / -1", marginBottom: -4 }}>
+                      Entsorgung aktuell nur innerhalb Nordrhein-Westfalens.
+                    </p>
+                    <AddressField id="objekt" label="Objekt-Adresse (NRW)" placeholder="Adresse in Deutschland suchen…" value={objektAdresse} onChange={setObjektAdresse} />
                     <div className="field">
                       <label htmlFor="etageVon">Etage (ohne Aufzug)</label>
                       <select id="etageVon" value={etageVon} onChange={(e) => setEtageVon(e.target.value)}>
@@ -429,7 +476,7 @@ export default function Home() {
                   <div className="items-grid">
                     {katalog.map((item) => (
                       <div className="item-row" key={item.id}>
-                        <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
+                        <span>{item.name}</span>
                         <div className="qty-control">
                           <button type="button" className="qty-btn" onClick={() => changeQty(item.id, -1)}>−</button>
                           <span className="qty-value">{gegenstaende[item.id] || 0}</span>
@@ -455,6 +502,14 @@ export default function Home() {
                         <input type="checkbox" checked={zusatz[key] || false} onChange={(e) => setZusatz((z) => ({ ...z, [key]: e.target.checked }))} />
                       </label>
                     ))}
+                  </div>
+                </div>
+
+                <div className="field" style={{ marginTop: 20 }}>
+                  <label>Wie viele Mitarbeiter sollen kommen?</label>
+                  <div className="segmented" style={{ maxWidth: 340 }}>
+                    <button type="button" className={mitarbeiter === 2 ? "active" : ""} onClick={() => setMitarbeiter(2)}>2 Mitarbeiter</button>
+                    <button type="button" className={mitarbeiter === 3 ? "active" : ""} onClick={() => setMitarbeiter(3)}>3 Mitarbeiter (schneller)</button>
                   </div>
                 </div>
 
@@ -504,6 +559,9 @@ export default function Home() {
                     {breakdown.zusatzLabels.map((l, i) => (
                       <div className="belegzeile" key={i}><span>{l}</span></div>
                     ))}
+                    {breakdown.mitarbeiterAufpreis > 0 && (
+                      <div className="belegzeile"><span>3. Mitarbeiter (schnellere Erledigung)</span><span>{breakdown.mitarbeiterAufpreis.toFixed(2)} €</span></div>
+                    )}
                     {breakdown.rabattBetrag > 0 && (
                       <div className="belegzeile"><span>Rabattcode</span><span>− {breakdown.rabattBetrag.toFixed(2)} €</span></div>
                     )}
@@ -588,16 +646,17 @@ function Footer() {
           <div className="foot-heading">Leistungen</div>
           <a href="#rechner">Umzug</a>
           <a href="#rechner">Entsorgung</a>
-          <a href="#leistungen">So funktioniert's</a>
+          <a href="/so-funktioniert">So funktioniert's</a>
         </div>
         <div>
           <div className="foot-heading">Rechtliches</div>
-          <a href="#">Impressum</a>
-          <a href="#">Datenschutz</a>
-          <a href="#">AGB &amp; Widerruf</a>
+          <a href="/impressum">Impressum</a>
+          <a href="/datenschutz">Datenschutz</a>
+          <a href="/agb">AGB &amp; Widerruf</a>
         </div>
         <div>
           <div className="foot-heading">Kontakt</div>
+          <a href="/ueber-uns">Über uns</a>
           <a href="mailto:info@umzugplus.de">info@umzugplus.de</a>
         </div>
       </div>

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "../lib/useAuth";
-import { useAvailability, WEEKDAYS } from "../lib/availability";
+import { useAvailability, WEEKDAYS, MONTHS } from "../lib/availability";
 
 const statusOptions = ["neu", "bestaetigt", "storniert", "abgeschlossen"];
 const statusLabel = {
@@ -62,9 +63,18 @@ export default function AdminPage() {
   }
 
   async function updateStatus(id, status) {
-    setAnfragen((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
-    await supabase.from("anfragen").update({ status }).eq("id", id);
+    const patch = { status };
+    if (status === "storniert") patch.storniert_at = new Date().toISOString();
+    setAnfragen((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    await supabase.from("anfragen").update(patch).eq("id", id);
     logAction(session.user.email, "anfrage.status", `${id} -> ${status}`);
+  }
+
+  async function deleteAnfrage(id, bookingNumber) {
+    if (!confirm(`Auftrag ${bookingNumber} wirklich unwiderruflich löschen? Er verschwindet auch beim Kunden und aus dem Umsatz.`)) return;
+    await supabase.from("anfragen").delete().eq("id", id);
+    setAnfragen((prev) => prev.filter((r) => r.id !== id));
+    await logAction(session.user.email, "anfrage.geloescht", bookingNumber);
   }
 
   function setDraftPrice(key, value) {
@@ -106,30 +116,6 @@ export default function AdminPage() {
     return { umsatz, offen, beschwerdenOffen, total: anfragen.length };
   }, [anfragen, beschwerden]);
 
-  function exportCSV() {
-    const rows = [
-      ["Auftrag", "Datum", "Kundentyp", "Von", "Nach", "km", "Preis", "Email", "Status"],
-      ...filteredAnfragen.map((a) => [
-        a.booking_number,
-        new Date(a.created_at).toLocaleDateString("de-DE"),
-        a.kundentyp,
-        a.von,
-        a.nach,
-        a.entfernung_km,
-        a.geschaetzter_preis,
-        a.email,
-        a.status,
-      ]),
-    ];
-    const csv = rows.map((r) => r.map((v) => `"${v ?? ""}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "umzugplus-auftraege.csv";
-    link.click();
-    logAction(session.user.email, "export.csv", `${filteredAnfragen.length} Zeilen`);
-  }
 
   if (loading || !isAdmin) {
     return (
@@ -179,7 +165,7 @@ export default function AdminPage() {
                       <option key={s} value={s}>{statusLabel[s]}</option>
                     ))}
                   </select>
-                  <button className="btn ghost" onClick={exportCSV}>CSV-Export</button>
+                  <Link className="btn ghost" href="/admin/abrechnung">Monatsabrechnung</Link>
                 </div>
 
                 <div className="admin-table-wrap">
@@ -226,6 +212,13 @@ export default function AdminPage() {
                               actorEmail={session.user.email}
                               onUpdated={(patch) => setAnfragen((prev) => prev.map((r) => (r.id === a.id ? { ...r, ...patch } : r)))}
                             />
+                            <button
+                              className="small-btn danger"
+                              style={{ marginTop: 6 }}
+                              onClick={() => deleteAnfrage(a.id, a.booking_number)}
+                            >
+                              Löschen
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -308,11 +301,29 @@ export default function AdminPage() {
 }
 
 function AdminKalender({ actorEmail }) {
-  const { loading, days, maxPerDay, counts, blocked, statusFor, reload, toISO } = useAvailability(35);
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const { loading, days, maxPerDay, counts, blocked, statusFor, reload, toISO } = useAvailability(month);
   const [savingCapacity, setSavingCapacity] = useState(false);
   const [capacityDraft, setCapacityDraft] = useState(maxPerDay);
 
   useEffect(() => setCapacityDraft(maxPerDay), [maxPerDay]);
+
+  function prevMonth() {
+    const d = new Date(month);
+    d.setMonth(d.getMonth() - 1);
+    if (d.getFullYear() < 2026) return;
+    setMonth(d);
+  }
+  function nextMonth() {
+    const d = new Date(month);
+    d.setMonth(d.getMonth() + 1);
+    if (d.getFullYear() > 2026) return;
+    setMonth(d);
+  }
 
   async function saveCapacity() {
     setSavingCapacity(true);
@@ -334,7 +345,7 @@ function AdminKalender({ actorEmail }) {
     reload();
   }
 
-  if (loading) return <div>Lade Kalender…</div>;
+  const firstWeekday = days.length > 0 ? days[0].getDay() : 0;
 
   return (
     <div>
@@ -351,35 +362,48 @@ function AdminKalender({ actorEmail }) {
         </div>
       </div>
 
-      <div className="termin-grid">
-        {days.map((d) => {
-          const iso = toISO(d);
-          const status = statusFor(d);
-          const count = counts[iso] || 0;
-          return (
-            <button
-              type="button"
-              key={iso}
-              onClick={() => status !== "closed" && toggleBlock(d)}
-              className={
-                "termin-day" +
-                (status === "free" ? " free" : "") +
-                (status === "full" || status === "blocked" ? " full" : "") +
-                (status === "closed" ? " closed" : "")
-              }
-              title={status === "closed" ? "Sonntag geschlossen" : blocked.has(iso) ? "Klicken zum Entsperren" : "Klicken zum Sperren"}
-            >
-              <span className="termin-wd">{WEEKDAYS[d.getDay()]}</span>
-              <span className="termin-dm">{d.getDate()}.{d.getMonth() + 1}.</span>
-              <span className="termin-count">
-                {status === "closed" ? "zu" : blocked.has(iso) ? "gesperrt" : `${count}/${maxPerDay}`}
-              </span>
-            </button>
-          );
-        })}
+      <div className="termin-nav">
+        <button type="button" className="small-btn" onClick={prevMonth}>←</button>
+        <strong>{MONTHS[month.getMonth()]} {month.getFullYear()}</strong>
+        <button type="button" className="small-btn" onClick={nextMonth}>→</button>
       </div>
+
+      {loading ? (
+        <div>Lade Kalender…</div>
+      ) : (
+        <div className="termin-grid termin-grid-month">
+          {WEEKDAYS.map((wd) => <div key={wd} className="termin-wd-head">{wd}</div>)}
+          {Array.from({ length: firstWeekday }).map((_, i) => <div key={"b" + i} />)}
+          {days.map((d) => {
+            const iso = toISO(d);
+            const status = statusFor(d);
+            const count = counts[iso] || 0;
+            const clickable = status !== "closed" && status !== "past" && status !== "holiday";
+            return (
+              <button
+                type="button"
+                key={iso}
+                onClick={() => clickable && toggleBlock(d)}
+                className={
+                  "termin-day" +
+                  (status === "free" ? " free" : "") +
+                  (status === "full" || status === "blocked" ? " full" : "") +
+                  (status === "closed" || status === "past" ? " closed" : "") +
+                  (status === "holiday" ? " holiday" : "")
+                }
+                title={status === "holiday" ? "Feiertag NRW" : status === "closed" ? "Sonntag geschlossen" : blocked.has(iso) ? "Klicken zum Entsperren" : "Klicken zum Sperren"}
+              >
+                <span className="termin-dm">{d.getDate()}</span>
+                <span className="termin-count">
+                  {status === "holiday" ? "Feiertag" : status === "closed" ? "zu" : status === "past" ? "–" : blocked.has(iso) ? "gesperrt" : `${count}/${maxPerDay}`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <p className="mini-note" style={{ marginTop: 12 }}>
-        Tage anklicken, um sie manuell zu sperren oder zu entsperren (Sonntage sind fest geschlossen).
+        Tage anklicken, um sie manuell zu sperren oder zu entsperren (Sonntage und NRW-Feiertage sind fest geschlossen).
       </p>
     </div>
   );
@@ -390,6 +414,9 @@ function AdminNutzer({ kunden, setKunden, actorEmail }) {
   const [role, setRole] = useState("user");
   const [status, setStatus] = useState("active");
   const [saving, setSaving] = useState(false);
+  const [detailId, setDetailId] = useState(null);
+  const [detailOrders, setDetailOrders] = useState([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   function startEdit(k) {
     setEditing(k.id);
@@ -406,6 +433,31 @@ function AdminNutzer({ kunden, setKunden, actorEmail }) {
     setEditing(null);
   }
 
+  async function toggleDetail(k) {
+    if (detailId === k.id) {
+      setDetailId(null);
+      return;
+    }
+    setDetailId(k.id);
+    setLoadingDetail(true);
+    const { data } = await supabase
+      .from("anfragen")
+      .select("*")
+      .eq("user_id", k.id)
+      .order("created_at", { ascending: false });
+    setDetailOrders(data || []);
+    setLoadingDetail(false);
+  }
+
+  async function quickToggleSuspend(k) {
+    const newStatus = k.status === "suspended" ? "active" : "suspended";
+    await supabase.from("profiles").update({ status: newStatus }).eq("id", k.id);
+    setKunden((prev) => prev.map((r) => (r.id === k.id ? { ...r, status: newStatus } : r)));
+    await logAction(actorEmail, "nutzer.sperre", `${k.email} -> ${newStatus}`);
+  }
+
+  const detailUser = kunden.find((k) => k.id === detailId);
+
   return (
     <div className="admin-table-wrap">
       <table className="admin-table">
@@ -417,36 +469,90 @@ function AdminNutzer({ kunden, setKunden, actorEmail }) {
         <tbody>
           {kunden.length === 0 && <tr><td colSpan={6}>Noch keine registrierten Nutzer.</td></tr>}
           {kunden.map((k) => (
-            <tr key={k.id}>
-              <td>{k.name || "–"}</td>
-              <td>{k.email}</td>
-              <td>
-                {editing === k.id ? (
-                  <select value={role} onChange={(e) => setRole(e.target.value)}>
-                    <option value="user">user</option>
-                    <option value="admin">admin</option>
-                  </select>
-                ) : k.role}
-              </td>
-              <td>
-                {editing === k.id ? (
-                  <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                    <option value="active">active</option>
-                    <option value="suspended">suspended</option>
-                  </select>
-                ) : (k.status || "active")}
-              </td>
-              <td>{new Date(k.created_at).toLocaleDateString("de-DE")}</td>
-              <td>
-                {editing === k.id ? (
-                  <button className="small-btn" onClick={() => save(k.id)} disabled={saving}>
-                    {saving ? "…" : "Speichern"}
+            <>
+              <tr key={k.id}>
+                <td>
+                  <button className="small-btn" onClick={() => toggleDetail(k)}>
+                    {k.name || k.email}
                   </button>
-                ) : (
-                  <button className="small-btn" onClick={() => startEdit(k)}>Bearbeiten</button>
-                )}
-              </td>
-            </tr>
+                </td>
+                <td>{k.email}</td>
+                <td>
+                  {editing === k.id ? (
+                    <select value={role} onChange={(e) => setRole(e.target.value)}>
+                      <option value="user">user</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  ) : k.role}
+                </td>
+                <td>
+                  {editing === k.id ? (
+                    <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                      <option value="active">active</option>
+                      <option value="suspended">suspended</option>
+                    </select>
+                  ) : (
+                    <span className={"payment-status-pill " + (k.status === "suspended" ? "nicht" : "voll")}>
+                      {k.status === "suspended" ? "Gesperrt" : "Aktiv"}
+                    </span>
+                  )}
+                </td>
+                <td>{new Date(k.created_at).toLocaleDateString("de-DE")}</td>
+                <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {editing === k.id ? (
+                    <button className="small-btn" onClick={() => save(k.id)} disabled={saving}>
+                      {saving ? "…" : "Speichern"}
+                    </button>
+                  ) : (
+                    <>
+                      <button className="small-btn" onClick={() => startEdit(k)}>Bearbeiten</button>
+                      <button className="small-btn danger" onClick={() => quickToggleSuspend(k)}>
+                        {k.status === "suspended" ? "Entsperren" : "Sperren"}
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+              {detailId === k.id && (
+                <tr>
+                  <td colSpan={6} style={{ background: "var(--bg-soft)" }}>
+                    <div style={{ padding: 16 }}>
+                      <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 8 }}>Kontaktdaten</div>
+                      <p style={{ fontSize: 13.5 }}>
+                        Telefon: {k.phone || "–"}<br />
+                        Adresse: {[k.adresse_strasse, k.adresse_hausnummer].filter(Boolean).join(" ") || "–"}
+                        {k.adresse_plz || k.adresse_stadt ? `, ${[k.adresse_plz, k.adresse_stadt].filter(Boolean).join(" ")}` : ""}
+                      </p>
+
+                      <div className="foot-heading" style={{ color: "var(--text)", margin: "16px 0 8px" }}>
+                        Aufträge ({detailOrders.length})
+                      </div>
+                      {loadingDetail ? (
+                        <p>Lädt…</p>
+                      ) : detailOrders.length === 0 ? (
+                        <p style={{ fontSize: 13.5, color: "var(--text-faint)" }}>Keine Aufträge vorhanden.</p>
+                      ) : (
+                        <table className="admin-table">
+                          <thead>
+                            <tr><th>Auftrag</th><th>Datum</th><th>Status</th><th>Preis</th></tr>
+                          </thead>
+                          <tbody>
+                            {detailOrders.map((o) => (
+                              <tr key={o.id}>
+                                <td>{o.booking_number}</td>
+                                <td>{new Date(o.created_at).toLocaleDateString("de-DE")}</td>
+                                <td>{statusLabel[o.status] || o.status}</td>
+                                <td>{o.geschaetzter_preis ? `${o.geschaetzter_preis.toFixed(2)} €` : "–"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>
