@@ -77,7 +77,7 @@ export default function MeineAuftraege() {
                         {statusLabel[o.status] || o.status}
                       </span>
                     </td>
-                    <td>{o.geschaetzter_preis ? `${o.geschaetzter_preis} €` : "–"}</td>
+                    <td>{o.geschaetzter_preis ? `${o.geschaetzter_preis.toFixed(2)} €` : "–"}</td>
                     <td>
                       <Link className="small-btn" href={`/konto/auftraege/${o.id}`}>
                         Details

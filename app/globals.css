@@ -1224,6 +1224,50 @@ button.nav-cta {
   .beleg-doc { border: none; padding: 0; }
 }
 
+/* ---------- Zahlungsmethoden ---------- */
+
+.payment-methods {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.payment-method-btn {
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: white;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.payment-method-btn:hover {
+  border-color: var(--red);
+  transform: translateY(-1px);
+}
+
+.payment-status-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.payment-status-pill.nicht { background: var(--red-soft); color: var(--red-dark); }
+.payment-status-pill.anzahlung { background: var(--yellow-soft); color: var(--yellow-dark); }
+.payment-status-pill.voll { background: #eaf7ee; color: #1f7a3f; }
+
+.payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 /* ---------- Services ---------- */
 
 section.services {

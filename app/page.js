@@ -35,6 +35,18 @@ const etagenOptions = [
   { value: "6", label: "6. Etage+" },
 ];
 
+function shortAddress(item) {
+  const a = item.address || {};
+  const road = a.road || a.pedestrian || a.footway || "";
+  const houseNumber = a.house_number || "";
+  const postcode = a.postcode || "";
+  const city = a.city || a.town || a.village || a.municipality || a.suburb || "";
+  const line1 = [road, houseNumber].filter(Boolean).join(" ");
+  const line2 = [postcode, city].filter(Boolean).join(" ");
+  const short = [line1, line2].filter(Boolean).join(", ");
+  return short || item.display_name;
+}
+
 function AddressField({ id, label, placeholder, value, onChange }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -51,7 +63,7 @@ function AddressField({ id, label, placeholder, value, onChange }) {
     }
     timerRef.current = setTimeout(async () => {
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=de&q=${encodeURIComponent(val)}`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=de&q=${encodeURIComponent(val)}`;
         const res = await fetch(url, { headers: { "Accept-Language": "de" } });
         const data = await res.json();
         setSuggestions(data || []);
@@ -78,8 +90,8 @@ function AddressField({ id, label, placeholder, value, onChange }) {
       {open && suggestions.length > 0 && (
         <ul className="suggestions">
           {suggestions.map((s) => (
-            <li key={s.place_id} onMouseDown={() => { onChange(s.display_name); setOpen(false); }}>
-              {s.display_name}
+            <li key={s.place_id} onMouseDown={() => { onChange(shortAddress(s)); setOpen(false); }}>
+              {shortAddress(s)}
             </li>
           ))}
         </ul>
@@ -285,7 +297,7 @@ export default function Home() {
         zusatzleistungen: zusatz,
         wunschtermin: wunschtermin || null,
         rabattcode: result.rabatt ? result.rabatt.code : null,
-        geschaetzter_preis: breakdown.brutto,
+        geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
         preis_details: breakdown,
         bezahlt_betrag: 0,
         name: name || null,
@@ -417,7 +429,7 @@ export default function Home() {
                   <div className="items-grid">
                     {katalog.map((item) => (
                       <div className="item-row" key={item.id}>
-                        <span>{item.name} <span className="admin-sub">({item.preis} €)</span></span>
+                        <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
                         <div className="qty-control">
                           <button type="button" className="qty-btn" onClick={() => changeQty(item.id, -1)}>−</button>
                           <span className="qty-value">{gegenstaende[item.id] || 0}</span>

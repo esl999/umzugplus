@@ -34,6 +34,10 @@ export default function AuftragDetail() {
   const [sending, setSending] = useState(false);
   const [showComplaintForm, setShowComplaintForm] = useState(false);
 
+  const [payStep, setPayStep] = useState(null);
+  const [payChoice, setPayChoice] = useState(null);
+  const [payNote, setPayNote] = useState("");
+
   useEffect(() => {
     if (!loading && !session) router.push("/login");
   }, [loading, session, router]);
@@ -157,7 +161,64 @@ export default function AuftragDetail() {
             <div className="belegzeile" style={{ marginTop: 8 }}><span>Anzahlung fällig</span><span>{d.anzahlung ? d.anzahlung.toFixed(2) : "–"} €</span></div>
             <div className="belegzeile"><span>Bereits bezahlt</span><span>{bezahlt.toFixed(2)} €</span></div>
             <div className="belegzeile" style={{ fontWeight: 700 }}><span>Offen</span><span>{offen.toFixed(2)} €</span></div>
-            <p style={{ marginTop: 8, fontSize: 12 }}>Online-Zahlung folgt in Kürze — wir melden uns aktuell persönlich für die Zahlungsabwicklung.</p>
+
+            {offen > 0 && order.status !== "storniert" && (
+              <div style={{ marginTop: 16 }}>
+                {payStep === null && (
+                  <button className="btn primary" onClick={() => setPayStep("choose")}>
+                    Jetzt bezahlen
+                  </button>
+                )}
+
+                {payStep === "choose" && (
+                  <div>
+                    <p style={{ fontSize: 13, marginBottom: 10 }}>Wie möchtest du zahlen?</p>
+                    <div className="method-cards">
+                      <div
+                        className={"method-card" + (payChoice === "anzahlung" ? " active" : "")}
+                        onClick={() => { setPayChoice("anzahlung"); setPayStep("method"); }}
+                      >
+                        <h4>Anzahlung ({gesamt > 0 ? Math.round(((d.anzahlung || 0) / gesamt) * 100) : 20}%)</h4>
+                        <p>{(d.anzahlung || 0).toFixed(2)} € jetzt anzahlen, Rest später.</p>
+                      </div>
+                      <div
+                        className={"method-card" + (payChoice === "gesamt" ? " active" : "")}
+                        onClick={() => { setPayChoice("gesamt"); setPayStep("method"); }}
+                      >
+                        <h4>Gesamtbetrag</h4>
+                        <p>{offen.toFixed(2)} € vollständig bezahlen.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {payStep === "method" && (
+                  <div>
+                    <p style={{ fontSize: 13, marginBottom: 10 }}>
+                      {payChoice === "anzahlung" ? (d.anzahlung || 0).toFixed(2) : offen.toFixed(2)} € — Zahlungsmethode wählen:
+                    </p>
+                    <div className="payment-methods">
+                      {["PayPal", "Klarna", "Apple Pay", "Mastercard"].map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="payment-method-btn"
+                          onClick={() => setPayNote("Zahlungsabwicklung ist in Vorbereitung — diese Auswahl hat aktuell noch keine Funktion. Wir melden uns persönlich bei dir.")}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                    {payNote && <div className="send-success" style={{ marginTop: 12 }}>{payNote}</div>}
+                    <button className="small-btn" style={{ marginTop: 10 }} onClick={() => { setPayStep(null); setPayNote(""); }}>
+                      Zurück
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p style={{ marginTop: 12, fontSize: 12 }}>Echte Zahlungsabwicklung folgt in Kürze — aktuell ist dies eine Vorschau.</p>
           </div>
 
           <div style={{ padding: 20, display: "flex", flexWrap: "wrap", gap: 10 }}>

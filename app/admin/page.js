@@ -145,7 +145,7 @@ export default function AdminPage() {
         <h1 className="admin-title">Admin-Bereich</h1>
 
         <div className="admin-stats">
-          <div className="admin-stat"><div className="k">Umsatz (Monat)</div><div className="v">{stats.umsatz.toFixed(0)} €</div></div>
+          <div className="admin-stat"><div className="k">Umsatz (Monat)</div><div className="v">{stats.umsatz.toFixed(2)} €</div></div>
           <div className="admin-stat"><div className="k">Offene Angebote</div><div className="v">{stats.offen}</div></div>
           <div className="admin-stat"><div className="k">Beschwerden offen</div><div className="v">{stats.beschwerdenOffen}</div></div>
           <div className="admin-stat"><div className="k">Aufträge gesamt</div><div className="v">{stats.total}</div></div>
@@ -194,11 +194,12 @@ export default function AdminPage() {
                         <th>Preis</th>
                         <th>Kontakt</th>
                         <th>Status</th>
+                        <th>Zahlung</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAnfragen.length === 0 && (
-                        <tr><td colSpan={8}>Keine Treffer.</td></tr>
+                        <tr><td colSpan={9}>Keine Treffer.</td></tr>
                       )}
                       {filteredAnfragen.map((a) => (
                         <tr key={a.id}>
@@ -207,7 +208,7 @@ export default function AdminPage() {
                           <td>{a.kundentyp === "gewerbe" ? "Gewerbe" : "Privat"}</td>
                           <td>{a.von} → {a.nach}</td>
                           <td>{a.entfernung_km}</td>
-                          <td>{a.geschaetzter_preis ? `${a.geschaetzter_preis} €` : "–"}</td>
+                          <td>{a.geschaetzter_preis ? `${a.geschaetzter_preis.toFixed(2)} €` : "–"}</td>
                           <td>
                             {a.name || "–"}
                             {a.email && <div className="admin-sub">{a.email}</div>}
@@ -218,6 +219,13 @@ export default function AdminPage() {
                                 <option key={s} value={s}>{statusLabel[s]}</option>
                               ))}
                             </select>
+                          </td>
+                          <td>
+                            <PaymentCell
+                              order={a}
+                              actorEmail={session.user.email}
+                              onUpdated={(patch) => setAnfragen((prev) => prev.map((r) => (r.id === a.id ? { ...r, ...patch } : r)))}
+                            />
                           </td>
                         </tr>
                       ))}
@@ -691,6 +699,62 @@ function AdminRabattcodes({ actorEmail }) {
           <button className="small-btn" onClick={() => toggleActive(c)}>{c.aktiv ? "Deaktivieren" : "Aktivieren"}</button>
         </div>
       ))}
+    </div>
+  );
+}
+
+function PaymentCell({ order, actorEmail, onUpdated }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const gesamt = order.geschaetzter_preis || 0;
+  const bezahlt = order.bezahlt_betrag || 0;
+  const anzahlungBetrag = order.preis_details?.anzahlung || 0;
+
+  let status = "nicht";
+  let statusText = "Nicht bezahlt";
+  if (bezahlt >= gesamt && gesamt > 0) {
+    status = "voll";
+    statusText = "Vollständig bezahlt";
+  } else if (bezahlt > 0) {
+    status = "anzahlung";
+    statusText = "Anzahlung bezahlt";
+  }
+
+  async function setBezahlt(betrag, extra) {
+    setBusy(true);
+    const patch = { bezahlt_betrag: Math.round(betrag * 100) / 100, ...extra };
+    await supabase.from("anfragen").update(patch).eq("id", order.id);
+    await logAction(actorEmail, "zahlung.update", `${order.booking_number} -> ${betrag}€`);
+    onUpdated(patch);
+    setBusy(false);
+    setOpen(false);
+  }
+
+  return (
+    <div>
+      <span className={"payment-status-pill " + status}>{statusText}</span>
+      <div>
+        <button className="small-btn" style={{ marginTop: 6 }} onClick={() => setOpen((v) => !v)}>
+          Zahlung verwalten
+        </button>
+      </div>
+      {open && (
+        <div className="payment-actions">
+          <button className="small-btn" disabled={busy} onClick={() => setBezahlt(anzahlungBetrag)}>
+            Anzahlung bestätigen
+          </button>
+          <button className="small-btn" disabled={busy} onClick={() => setBezahlt(gesamt)}>
+            Zahlungseingang bestätigen
+          </button>
+          <button className="small-btn" disabled={busy} onClick={() => setBezahlt(gesamt, { status: "abgeschlossen" })}>
+            Bar bezahlt — abschließen
+          </button>
+          <button className="small-btn danger" disabled={busy} onClick={() => setBezahlt(0)}>
+            Zurückerstatten
+          </button>
+        </div>
+      )}
     </div>
   );
 }
