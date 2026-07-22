@@ -154,7 +154,7 @@ export default function AdminPage() {
         <div className="segmented" style={{ maxWidth: 640, marginBottom: 28 }}>
           <button className={tab === "anfragen" ? "active" : ""} onClick={() => setTab("anfragen")}>Aufträge</button>
           <button className={tab === "kalender" ? "active" : ""} onClick={() => setTab("kalender")}>Kalender</button>
-          <button className={tab === "preise" ? "active" : ""} onClick={() => setTab("preise")}>Preise</button>
+          <button className={tab === "preise" ? "active" : ""} onClick={() => setTab("preise")}>Katalog &amp; Preise</button>
           <button className={tab === "kunden" ? "active" : ""} onClick={() => setTab("kunden")}>Nutzer</button>
           <button className={tab === "beschwerden" ? "active" : ""} onClick={() => setTab("beschwerden")}>Beschwerden</button>
           <button className={tab === "logs" ? "active" : ""} onClick={() => setTab("logs")}>Logs</button>
@@ -234,26 +234,34 @@ export default function AdminPage() {
             )}
 
             {tab === "preise" && (
-              <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-                {preise.map((row) => (
-                  <div className="price-row" key={row.key}>
-                    <div>
-                      <div className="price-row-label">{row.label}</div>
-                      <div className="admin-sub">pro {row.unit}</div>
+              <>
+                <p className="mini-note" style={{ marginBottom: 16 }}>
+                  Alle Preise gelten sofort für neue Anfragen. Beträge in Euro, Sätze in Prozent.
+                </p>
+                <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>Preis-Parameter</div>
+                <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 32 }}>
+                  {preise.map((row) => (
+                    <div className="price-row" key={row.key}>
+                      <div>
+                        <div className="price-row-label">{row.label}</div>
+                        <div className="admin-sub">{row.unit}</div>
+                      </div>
+                      <div className="price-row-controls">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={row._draft}
+                          onChange={(e) => setDraftPrice(row.key, e.target.value)}
+                        />
+                        <button className="btn primary" onClick={() => savePrice(row.key)}>Speichern</button>
+                      </div>
                     </div>
-                    <div className="price-row-controls">
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={row._draft}
-                        onChange={(e) => setDraftPrice(row.key, e.target.value)}
-                      />
-                      <span>€</span>
-                      <button className="btn primary" onClick={() => savePrice(row.key)}>Speichern</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                <AdminKatalog actorEmail={session.user.email} />
+                <AdminRabattcodes actorEmail={session.user.email} />
+              </>
             )}
 
             {tab === "beschwerden" && (
@@ -521,6 +529,166 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
               </>
             )}
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdminKatalog({ actorEmail }) {
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [drafts, setDrafts] = useState({});
+  const [newName, setNewName] = useState("");
+  const [newKategorie, setNewKategorie] = useState("");
+  const [newPreis, setNewPreis] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function load() {
+    setLoadingItems(true);
+    const { data } = await supabase.from("katalog_items").select("*").order("kategorie").order("name");
+    setItems(data || []);
+    const d = {};
+    (data || []).forEach((i) => (d[i.id] = i.preis));
+    setDrafts(d);
+    setLoadingItems(false);
+  }
+
+  async function saveItem(id) {
+    await supabase.from("katalog_items").update({ preis: Number(drafts[id]) }).eq("id", id);
+    await logAction(actorEmail, "katalog.preis", `${id} -> ${drafts[id]}`);
+    load();
+  }
+
+  async function toggleActive(item) {
+    await supabase.from("katalog_items").update({ aktiv: !item.aktiv }).eq("id", item.id);
+    await logAction(actorEmail, item.aktiv ? "katalog.deaktiviert" : "katalog.aktiviert", item.name);
+    load();
+  }
+
+  async function addItem() {
+    if (!newName.trim() || !newPreis) return;
+    setAdding(true);
+    await supabase.from("katalog_items").insert({
+      name: newName.trim(),
+      kategorie: newKategorie.trim() || "Sonstiges",
+      preis: Number(newPreis),
+    });
+    await logAction(actorEmail, "katalog.neu", newName.trim());
+    setNewName("");
+    setNewKategorie("");
+    setNewPreis("");
+    setAdding(false);
+    load();
+  }
+
+  if (loadingItems) return <div>Lade Katalog…</div>;
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>
+        Gegenstände — Katalog ({items.length})
+      </div>
+
+      <div className="admin-toolbar">
+        <input className="admin-search" placeholder="Name (z.B. Kühlschrank)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <input className="admin-search" style={{ maxWidth: 160 }} placeholder="Kategorie" value={newKategorie} onChange={(e) => setNewKategorie(e.target.value)} />
+        <input className="admin-search" type="number" style={{ maxWidth: 100 }} placeholder="€" value={newPreis} onChange={(e) => setNewPreis(e.target.value)} />
+        <button className="btn primary" onClick={addItem} disabled={adding}>+ Anlegen</button>
+      </div>
+
+      <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        {items.map((item) => (
+          <div className="price-row" key={item.id} style={{ opacity: item.aktiv ? 1 : 0.5 }}>
+            <div>
+              <div className="price-row-label">{item.name}</div>
+              <div className="admin-sub">{item.kategorie}</div>
+            </div>
+            <div className="price-row-controls">
+              <input
+                type="number"
+                value={drafts[item.id] ?? item.preis}
+                onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
+              />
+              <button className="btn primary" onClick={() => saveItem(item.id)}>Speichern</button>
+              <button className="small-btn" onClick={() => toggleActive(item)}>
+                {item.aktiv ? "Deaktivieren" : "Aktivieren"}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminRabattcodes({ actorEmail }) {
+  const [codes, setCodes] = useState([]);
+  const [loadingCodes, setLoadingCodes] = useState(true);
+  const [code, setCode] = useState("");
+  const [typ, setTyp] = useState("prozent");
+  const [wert, setWert] = useState("");
+  const [maxNutzungen, setMaxNutzungen] = useState("");
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function load() {
+    setLoadingCodes(true);
+    const { data } = await supabase.from("rabattcodes").select("*").order("code");
+    setCodes(data || []);
+    setLoadingCodes(false);
+  }
+
+  async function addCode() {
+    if (!code.trim() || !wert) return;
+    await supabase.from("rabattcodes").insert({
+      code: code.trim().toUpperCase(),
+      typ,
+      wert: Number(wert),
+      max_nutzungen: maxNutzungen ? Number(maxNutzungen) : null,
+    });
+    await logAction(actorEmail, "rabattcode.neu", code.trim().toUpperCase());
+    setCode("");
+    setWert("");
+    setMaxNutzungen("");
+    load();
+  }
+
+  async function toggleActive(c) {
+    await supabase.from("rabattcodes").update({ aktiv: !c.aktiv }).eq("code", c.code);
+    load();
+  }
+
+  if (loadingCodes) return null;
+
+  return (
+    <div>
+      <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>Rabattcodes</div>
+      <div className="admin-toolbar">
+        <input className="admin-search" style={{ maxWidth: 140 }} placeholder="CODE" value={code} onChange={(e) => setCode(e.target.value)} />
+        <select value={typ} onChange={(e) => setTyp(e.target.value)}>
+          <option value="prozent">Prozent (%)</option>
+          <option value="fix">Fixbetrag (€)</option>
+        </select>
+        <input className="admin-search" type="number" style={{ maxWidth: 100 }} placeholder="Wert" value={wert} onChange={(e) => setWert(e.target.value)} />
+        <input className="admin-search" type="number" style={{ maxWidth: 140 }} placeholder="max. Nutzungen" value={maxNutzungen} onChange={(e) => setMaxNutzungen(e.target.value)} />
+        <button className="btn primary" onClick={addCode}>+ Anlegen</button>
+      </div>
+      {codes.map((c) => (
+        <div className="price-row" key={c.code} style={{ opacity: c.aktiv ? 1 : 0.5, marginBottom: 8 }}>
+          <div>
+            <div className="price-row-label">{c.code}</div>
+            <div className="admin-sub">
+              {c.typ === "prozent" ? `${c.wert}%` : `${c.wert} €`} · {c.nutzungen}/{c.max_nutzungen ?? "∞"} genutzt
+            </div>
+          </div>
+          <button className="small-btn" onClick={() => toggleActive(c)}>{c.aktiv ? "Deaktivieren" : "Aktivieren"}</button>
         </div>
       ))}
     </div>

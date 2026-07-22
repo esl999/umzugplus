@@ -24,7 +24,7 @@ export default function Navbar() {
         <ul className="nav-links">
           <li><Link href="/#rechner">Rechner</Link></li>
           <li><Link href="/#leistungen">Leistungen</Link></li>
-          <li><Link href="/#kontakt">Kontakt</Link></li>
+          <li><a href="#footer-kontakt">Kontakt</a></li>
           {isAdmin && <li><Link href="/admin">Admin</Link></li>}
         </ul>
 
@@ -32,8 +32,9 @@ export default function Navbar() {
           <div style={{ width: 90 }} />
         ) : session ? (
           <div className="auth-buttons">
-            <Link className="nav-cta ghost" href="/konto">Mein Konto</Link>
-            <button className="nav-cta" onClick={handleLogout}>Abmelden</button>
+            <Link className="nav-cta" href="/konto/auftraege">Meine Aufträge</Link>
+            <Link className="nav-cta ghost" href="/konto">Konto</Link>
+            <button className="nav-cta ghost" onClick={handleLogout}>Abmelden</button>
           </div>
         ) : (
           <div className="auth-buttons">

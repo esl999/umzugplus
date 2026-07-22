@@ -17,17 +17,12 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 async function geocode(query) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=0&q=${encodeURIComponent(
-    query
-  )}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
   const res = await fetch(url, { headers: { "Accept-Language": "de" } });
   if (!res.ok) throw new Error("Geocoding fehlgeschlagen");
   const data = await res.json();
   if (!data || data.length === 0) throw new Error("not_found");
-  return {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-  };
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
 }
 
 const etagenOptions = [
@@ -40,59 +35,31 @@ const etagenOptions = [
   { value: "6", label: "6. Etage+" },
 ];
 
-const moebelListe = [
-  { key: "sofa", label: "Sofa / Couch" },
-  { key: "sessel", label: "Sessel" },
-  { key: "bettDoppel", label: "Doppelbett" },
-  { key: "bettEinzel", label: "Einzelbett" },
-  { key: "kleiderschrank", label: "Kleiderschrank" },
-  { key: "kommode", label: "Kommode" },
-  { key: "esstisch", label: "Esstisch mit Stühlen" },
-  { key: "kuehlschrank", label: "Kühlschrank" },
-  { key: "waschmaschine", label: "Waschmaschine" },
-  { key: "kartons", label: "Umzugskartons (ca.)" },
-];
-
 function AddressField({ id, label, placeholder, value, onChange }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
   const timerRef = useRef(null);
 
   function handleChange(e) {
     const val = e.target.value;
     onChange(val);
-
     if (timerRef.current) clearTimeout(timerRef.current);
-
     if (val.trim().length < 3) {
       setSuggestions([]);
       setOpen(false);
       return;
     }
-
     timerRef.current = setTimeout(async () => {
-      setSearching(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=de&q=${encodeURIComponent(
-          val
-        )}`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=de&q=${encodeURIComponent(val)}`;
         const res = await fetch(url, { headers: { "Accept-Language": "de" } });
         const data = await res.json();
         setSuggestions(data || []);
         setOpen(true);
       } catch {
         setSuggestions([]);
-      } finally {
-        setSearching(false);
       }
     }, 400);
-  }
-
-  function selectSuggestion(s) {
-    onChange(s.display_name);
-    setSuggestions([]);
-    setOpen(false);
   }
 
   return (
@@ -108,11 +75,10 @@ function AddressField({ id, label, placeholder, value, onChange }) {
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         autoComplete="off"
       />
-      {searching && <div className="suggest-hint">Suche Adressen…</div>}
       {open && suggestions.length > 0 && (
         <ul className="suggestions">
           {suggestions.map((s) => (
-            <li key={s.place_id} onMouseDown={() => selectSuggestion(s)}>
+            <li key={s.place_id} onMouseDown={() => { onChange(s.display_name); setOpen(false); }}>
               {s.display_name}
             </li>
           ))}
@@ -123,9 +89,11 @@ function AddressField({ id, label, placeholder, value, onChange }) {
 }
 
 export default function Home() {
+  const [leistung, setLeistung] = useState("umzug");
   const [kundentyp, setKundentyp] = useState("privat");
   const [von, setVon] = useState("");
   const [nach, setNach] = useState("");
+  const [objektAdresse, setObjektAdresse] = useState("");
   const [vonAufzug, setVonAufzug] = useState(false);
   const [nachAufzug, setNachAufzug] = useState(false);
   const [etageVon, setEtageVon] = useState("0");
@@ -133,61 +101,119 @@ export default function Home() {
   const [berechnungsart, setBerechnungsart] = useState("flaeche");
   const [flaeche, setFlaeche] = useState("");
   const [gegenstaende, setGegenstaende] = useState({});
-  const [name, setName] = useState("");
+  const [zusatz, setZusatz] = useState({ moebelAbbau: false, moebelEinbau: false, verpackungsservice: false, halteverbotszone: false });
+  const [sonstiges, setSonstiges] = useState("");
+  const [rabattcodeInput, setRabattcodeInput] = useState("");
   const [wunschtermin, setWunschtermin] = useState("");
+
+  const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+
+  const [prices, setPrices] = useState(null);
+  const [katalog, setKatalog] = useState([]);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [prices, setPrices] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sendError, setSendError] = useState("");
 
+  const rechnerRef = useRef(null);
+
   useEffect(() => {
-    async function loadPrices() {
-      const { data } = await supabase.from("price_settings").select("*");
-      if (data) {
+    async function load() {
+      const [p, k] = await Promise.all([
+        supabase.from("price_settings").select("*"),
+        supabase.from("katalog_items").select("*").eq("aktiv", true).order("kategorie"),
+      ]);
+      if (p.data) {
         const map = {};
-        data.forEach((row) => {
-          map[row.key] = row;
-        });
+        p.data.forEach((row) => (map[row.key] = row));
         setPrices(map);
       }
+      setKatalog(k.data || []);
     }
-    loadPrices();
+    load();
 
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user?.email) setContactEmail(data.session.user.email);
     });
   }, []);
 
-  function computePrice() {
-    if (!prices || !result) return null;
-    let sum = 0;
-
-    if (berechnungsart === "flaeche") {
-      sum += (Number(flaeche) || 0) * (prices.proQm?.price || 0);
-    } else {
-      moebelListe.forEach((m) => {
-        sum += (gegenstaende[m.key] || 0) * (prices[m.key]?.price || 0);
-      });
-    }
-
-    sum += (Number(result.km) || 0) * (prices.proKm?.price || 0);
-    if (!vonAufzug) sum += Number(etageVon) * (prices.proEtage?.price || 0);
-    if (!nachAufzug) sum += Number(etageNach) * (prices.proEtage?.price || 0);
-
-    return Math.round(sum);
+  function scrollToRechner(l) {
+    setLeistung(l);
+    rechnerRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
-  function changeQty(key, delta) {
+  function changeQty(id, delta) {
     setGegenstaende((prev) => {
-      const current = prev[key] || 0;
-      const next = Math.max(0, current + delta);
-      return { ...prev, [key]: next };
+      const next = Math.max(0, (prev[id] || 0) + delta);
+      return { ...prev, [id]: next };
     });
+  }
+
+  function computeBreakdown() {
+    if (!prices || !result) return null;
+
+    const grundpreis = leistung === "umzug" ? prices.grundpreisUmzug.price : prices.grundpreisEntsorgung.price;
+    const proQm = leistung === "umzug" ? prices.proQmUmzug.price : prices.proQmEntsorgung.price;
+
+    let umfang = 0;
+    let umfangLabel = "";
+    if (berechnungsart === "flaeche") {
+      umfang = (Number(flaeche) || 0) * proQm;
+      umfangLabel = `Fläche: ${flaeche || 0} m² × ${proQm.toFixed(2)} €/m²`;
+    } else {
+      umfang = katalog.reduce((sum, item) => sum + (gegenstaende[item.id] || 0) * item.preis, 0);
+      umfangLabel = "Gegenstände (einzeln ausgewählt)";
+    }
+
+    const basis = grundpreis + umfang;
+
+    const etagenOhneAufzug = (vonAufzug ? 0 : Number(etageVon)) + (leistung === "umzug" ? (nachAufzug ? 0 : Number(etageNach)) : 0);
+    const etagenzuschlag = basis * (prices.etagenzuschlag.price / 100) * etagenOhneAufzug;
+
+    const km = leistung === "umzug" ? Number(result.km) : 0;
+    const fernumzug = km > prices.fernumzugAbKm.price;
+    const kmPreis = fernumzug ? prices.proKmFern.price : prices.proKm.price;
+    const transport = km * kmPreis;
+
+    let zusatzSumme = 0;
+    const zusatzLabels = [];
+    if (zusatz.moebelAbbau) { zusatzSumme += prices.moebelAbbau.price; zusatzLabels.push(`Möbel-Abbau (${prices.moebelAbbau.price} €)`); }
+    if (zusatz.moebelEinbau) { zusatzSumme += prices.moebelEinbau.price; zusatzLabels.push(`Möbel-Einbau (${prices.moebelEinbau.price} €)`); }
+    if (zusatz.verpackungsservice) { zusatzSumme += prices.verpackungsservice.price; zusatzLabels.push(`Verpackungsservice (${prices.verpackungsservice.price} €)`); }
+    if (zusatz.halteverbotszone) { zusatzSumme += prices.halteverbotszone.price; zusatzLabels.push(`Halteverbotszone (${prices.halteverbotszone.price} €)`); }
+    if (zusatz.transportversicherung) {
+      const v = basis * (prices.transportversicherung.price / 100);
+      zusatzSumme += v;
+      zusatzLabels.push(`Transportversicherung (${prices.transportversicherung.price}%)`);
+    }
+
+    let netto = grundpreis + umfang + etagenzuschlag + transport + zusatzSumme;
+
+    if (kundentyp === "gewerbe") {
+      netto = netto * (1 - prices.rabattGewerbe.price / 100);
+    }
+
+    let rabattBetrag = 0;
+    if (result.rabatt) {
+      if (result.rabatt.typ === "prozent") rabattBetrag = netto * (result.rabatt.wert / 100);
+      else rabattBetrag = result.rabatt.wert;
+      netto = Math.max(0, netto - rabattBetrag);
+    }
+
+    const brutto = netto * (1 + prices.mwst.price / 100);
+    const gesamt = Math.max(brutto, prices.mindestauftragswert.price);
+    const anzahlung = gesamt * (prices.anzahlung.price / 100);
+
+    return {
+      grundpreis, umfang, umfangLabel, etagenOhneAufzug, etagenzuschlag,
+      km, fernumzug, transport, zusatzSumme, zusatzLabels, rabattBetrag,
+      netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt,
+      anzahlung, bezahlt: 0, offen: gesamt,
+    };
   }
 
   async function handleCalculate(e) {
@@ -195,25 +221,39 @@ export default function Home() {
     setError("");
     setResult(null);
 
-    if (!von.trim() || !nach.trim()) {
+    if (leistung === "umzug" && (!von.trim() || !nach.trim())) {
       setError("Bitte gib Start- und Zielort ein.");
+      return;
+    }
+    if (leistung === "entsorgung" && !objektAdresse.trim()) {
+      setError("Bitte gib die Objekt-Adresse ein.");
       return;
     }
 
     setLoading(true);
     try {
-      const [a, b] = await Promise.all([geocode(von), geocode(nach)]);
-      const km = haversineKm(a.lat, a.lon, b.lat, b.lon);
-      const etagenDiff = Math.abs(Number(etageNach) - Number(etageVon));
+      let km = 0;
+      if (leistung === "umzug") {
+        const [a, b] = await Promise.all([geocode(von), geocode(nach)]);
+        km = haversineKm(a.lat, a.lon, b.lat, b.lon);
+      }
 
-      setResult({
-        km: km.toFixed(1),
-        etagenDiff,
-      });
+      let rabatt = null;
+      if (rabattcodeInput.trim()) {
+        const { data } = await supabase
+          .from("rabattcodes")
+          .select("*")
+          .eq("code", rabattcodeInput.trim().toUpperCase())
+          .eq("aktiv", true)
+          .maybeSingle();
+        if (data && (!data.max_nutzungen || data.nutzungen < data.max_nutzungen)) {
+          rabatt = { code: data.code, typ: data.typ, wert: data.wert };
+        }
+      }
+
+      setResult({ km: km.toFixed(1), rabatt });
     } catch (err) {
-      setError(
-        "Einer der beiden Orte konnte nicht gefunden werden. Bitte prüfe die Schreibweise oder wähle einen Vorschlag aus der Liste."
-      );
+      setError("Die Adresse konnte nicht gefunden werden. Bitte prüfe die Eingabe.");
     } finally {
       setLoading(false);
     }
@@ -223,14 +263,17 @@ export default function Home() {
     setSendError("");
     setSending(true);
     try {
+      const breakdown = computeBreakdown();
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id || null;
 
       const { error: insertError } = await supabase.from("anfragen").insert({
         user_id: userId,
         kundentyp,
-        von,
-        nach,
+        leistung,
+        von: leistung === "umzug" ? von : objektAdresse,
+        nach: leistung === "umzug" ? nach : null,
+        objekt_adresse: leistung === "entsorgung" ? objektAdresse : null,
         entfernung_km: Number(result.km),
         etage_von: etageVon,
         etage_nach: etageNach,
@@ -239,8 +282,12 @@ export default function Home() {
         berechnungsart,
         flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
         gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
+        zusatzleistungen: zusatz,
         wunschtermin: wunschtermin || null,
-        geschaetzter_preis: computePrice(),
+        rabattcode: result.rabatt ? result.rabatt.code : null,
+        geschaetzter_preis: breakdown.brutto,
+        preis_details: breakdown,
+        bezahlt_betrag: 0,
         name: name || null,
         email: contactEmail || null,
         telefon: telefon || null,
@@ -255,175 +302,126 @@ export default function Home() {
     }
   }
 
+  const breakdown = result ? computeBreakdown() : null;
+
   return (
     <>
       <header className="hero">
         <div className="wrap">
-          <span className="badge">● Kostenlos &amp; unverbindlich</span>
+          <span className="badge">● Festpreis in 60 Sekunden · ohne Anmeldung</span>
           <h1>
-            Ihr Umzug. <span className="accent">Einfach organisiert.</span>
+            Umzug &amp; Entsorgung — <span className="accent">fair, transparent, sofort kalkuliert.</span>
           </h1>
           <p className="lead">
-            UmzugPlus bringt Ihren Hausstand sicher von A nach B — planen Sie
-            Ihren Umzug in wenigen Klicks und erhalten Sie eine erste
-            Einschätzung direkt online.
+            Wähle deine Leistung, berechne online deinen Preis und erhalte dein
+            Angebot direkt hier — kein Konto nötig.
           </p>
+
+          <div className="hero-choice">
+            <button className="hero-choice-btn" onClick={() => scrollToRechner("umzug")}>
+              <strong>Umzug</strong>
+              <span>Privat- oder Firmenumzug berechnen</span>
+            </button>
+            <button className="hero-choice-btn" onClick={() => scrollToRechner("entsorgung")}>
+              <strong>Entsorgung</strong>
+              <span>Entrümpelung &amp; Haushaltsauflösung</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <section className="calc-section" id="rechner">
+      <section className="calc-section" id="rechner" ref={rechnerRef}>
         <div className="wrap">
           <div className="calc-card">
             <div className="calc-inner">
-              <div className="calc-title">Umzugsrechner</div>
-              <div className="calc-sub">
-                Beantworte ein paar kurze Fragen zu deinem Umzug.
+              <div className="calc-title">Sofort-Preis berechnen</div>
+              <div className="calc-sub">Alle Preise kommen live aus unserem Katalog — transparent aufgeschlüsselt.</div>
+
+              <div className="field" style={{ marginBottom: 20 }}>
+                <label>Leistung</label>
+                <div className="segmented" style={{ maxWidth: 300 }}>
+                  <button type="button" className={leistung === "umzug" ? "active" : ""} onClick={() => setLeistung("umzug")}>Umzug</button>
+                  <button type="button" className={leistung === "entsorgung" ? "active" : ""} onClick={() => setLeistung("entsorgung")}>Entsorgung</button>
+                </div>
               </div>
 
               <div className="field" style={{ marginBottom: 20 }}>
-                <label>Für wen ist der Umzug?</label>
-                <div className="segmented">
-                  <button
-                    type="button"
-                    className={kundentyp === "privat" ? "active" : ""}
-                    onClick={() => setKundentyp("privat")}
-                  >
-                    Privatkunde
-                  </button>
-                  <button
-                    type="button"
-                    className={kundentyp === "gewerbe" ? "active" : ""}
-                    onClick={() => setKundentyp("gewerbe")}
-                  >
-                    Gewerbekunde
-                  </button>
+                <label>Für wen?</label>
+                <div className="segmented" style={{ maxWidth: 300 }}>
+                  <button type="button" className={kundentyp === "privat" ? "active" : ""} onClick={() => setKundentyp("privat")}>Privat</button>
+                  <button type="button" className={kundentyp === "gewerbe" ? "active" : ""} onClick={() => setKundentyp("gewerbe")}>Gewerblich</button>
                 </div>
               </div>
 
               <form onSubmit={handleCalculate}>
-                <div className="calc-grid">
-                  <AddressField
-                    id="von"
-                    label="Von (Straße, Ort oder PLZ)"
-                    placeholder="z.B. Musterstraße 1, Hagen"
-                    value={von}
-                    onChange={setVon}
-                  />
-                  <AddressField
-                    id="nach"
-                    label="Nach (Straße, Ort oder PLZ)"
-                    placeholder="z.B. Domplatz 1, Köln"
-                    value={nach}
-                    onChange={setNach}
-                  />
-                </div>
-
-                <div className="calc-row-3">
-                  <div className="field">
-                    <label htmlFor="etageVon">Etage (Auszug)</label>
-                    <select
-                      id="etageVon"
-                      value={etageVon}
-                      onChange={(e) => setEtageVon(e.target.value)}
-                    >
-                      {etagenOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={vonAufzug}
-                        onChange={(e) => setVonAufzug(e.target.checked)}
-                      />
-                      Aufzug vorhanden
-                    </label>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="etageNach">Etage (Einzug)</label>
-                    <select
-                      id="etageNach"
-                      value={etageNach}
-                      onChange={(e) => setEtageNach(e.target.value)}
-                    >
-                      {etagenOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <label className="checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={nachAufzug}
-                        onChange={(e) => setNachAufzug(e.target.checked)}
-                      />
-                      Aufzug vorhanden
-                    </label>
-                  </div>
-                  <div className="field">
-                    <label>&nbsp;</label>
-                    <div className="mini-note">
-                      Aufzüge verkürzen den Tragweg — hilft uns bei der Personalplanung.
+                {leistung === "umzug" ? (
+                  <>
+                    <div className="calc-grid">
+                      <AddressField id="von" label="Von (Auszug)" placeholder="z.B. Musterstraße 1, Hagen" value={von} onChange={setVon} />
+                      <AddressField id="nach" label="Nach (Einzug)" placeholder="z.B. Domplatz 1, Köln" value={nach} onChange={setNach} />
+                    </div>
+                    <div className="calc-row-3">
+                      <div className="field">
+                        <label htmlFor="etageVon">Etage (Auszug)</label>
+                        <select id="etageVon" value={etageVon} onChange={(e) => setEtageVon(e.target.value)}>
+                          {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> Aufzug vorhanden</label>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="etageNach">Etage (Einzug)</label>
+                        <select id="etageNach" value={etageNach} onChange={(e) => setEtageNach(e.target.value)}>
+                          {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        <label className="checkbox-row"><input type="checkbox" checked={nachAufzug} onChange={(e) => setNachAufzug(e.target.checked)} /> Aufzug vorhanden</label>
+                      </div>
+                      <div className="field">
+                        <label>&nbsp;</label>
+                        <div className="mini-note">Entfernung wird automatisch berechnet, sobald beide Adressen gewählt sind.</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="calc-grid">
+                    <AddressField id="objekt" label="Objekt-Adresse" placeholder="Adresse in Deutschland suchen…" value={objektAdresse} onChange={setObjektAdresse} />
+                    <div className="field">
+                      <label htmlFor="etageVon">Etage (ohne Aufzug)</label>
+                      <select id="etageVon" value={etageVon} onChange={(e) => setEtageVon(e.target.value)}>
+                        {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                      <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> Aufzug vorhanden</label>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label>Möchtest du anhand der Wohnfläche berechnen oder einzelne Gegenstände auswählen?</label>
+                  <label>Wie möchtest du berechnen?</label>
                   <div className="method-cards">
-                    <div
-                      className={"method-card" + (berechnungsart === "flaeche" ? " active" : "")}
-                      onClick={() => setBerechnungsart("flaeche")}
-                    >
-                      <h4>Anhand der Wohnfläche</h4>
-                      <p>Schnell &amp; einfach — du gibst nur die Quadratmeterzahl an.</p>
+                    <div className={"method-card" + (berechnungsart === "flaeche" ? " active" : "")} onClick={() => setBerechnungsart("flaeche")}>
+                      <h4>Nach Fläche (m²)</h4>
+                      <p>Schnell &amp; einfach — nur die Quadratmeterzahl.</p>
                     </div>
-                    <div
-                      className={"method-card" + (berechnungsart === "gegenstaende" ? " active" : "")}
-                      onClick={() => setBerechnungsart("gegenstaende")}
-                    >
-                      <h4>Einzelne Gegenstände auswählen</h4>
-                      <p>Genauer — du gibst an, welche Möbelstücke umziehen.</p>
+                    <div className={"method-card" + (berechnungsart === "gegenstaende" ? " active" : "")} onClick={() => setBerechnungsart("gegenstaende")}>
+                      <h4>Nach Gegenständen</h4>
+                      <p>Genauer — einzelne Möbelstücke auswählen.</p>
                     </div>
                   </div>
                 </div>
 
                 {berechnungsart === "flaeche" ? (
                   <div className="field" style={{ marginTop: 16, maxWidth: 260 }}>
-                    <label htmlFor="flaeche">Wohnfläche (m²)</label>
-                    <input
-                      id="flaeche"
-                      type="number"
-                      min="0"
-                      placeholder="z.B. 65"
-                      value={flaeche}
-                      onChange={(e) => setFlaeche(e.target.value)}
-                    />
+                    <label htmlFor="flaeche">Fläche (m²)</label>
+                    <input id="flaeche" type="number" min="0" placeholder="z.B. 60" value={flaeche} onChange={(e) => setFlaeche(e.target.value)} />
                   </div>
                 ) : (
                   <div className="items-grid">
-                    {moebelListe.map((m) => (
-                      <div className="item-row" key={m.key}>
-                        <span>{m.label}</span>
+                    {katalog.map((item) => (
+                      <div className="item-row" key={item.id}>
+                        <span>{item.name} <span className="admin-sub">({item.preis} €)</span></span>
                         <div className="qty-control">
-                          <button
-                            type="button"
-                            className="qty-btn"
-                            onClick={() => changeQty(m.key, -1)}
-                          >
-                            −
-                          </button>
-                          <span className="qty-value">{gegenstaende[m.key] || 0}</span>
-                          <button
-                            type="button"
-                            className="qty-btn"
-                            onClick={() => changeQty(m.key, 1)}
-                          >
-                            +
-                          </button>
+                          <button type="button" className="qty-btn" onClick={() => changeQty(item.id, -1)}>−</button>
+                          <span className="qty-value">{gegenstaende[item.id] || 0}</span>
+                          <button type="button" className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
                         </div>
                       </div>
                     ))}
@@ -431,100 +429,102 @@ export default function Home() {
                 )}
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label>Wunschtermin (optional, hilft bei der Planung)</label>
+                  <label>Zusatzleistungen</label>
+                  <div className="items-grid">
+                    {[
+                      ["moebelAbbau", "Möbel-Abbau / Demontage"],
+                      ["moebelEinbau", "Möbel-Einbau / Montage"],
+                      ["verpackungsservice", "Verpackungsservice inkl. Material"],
+                      ["halteverbotszone", "Halteverbotszone"],
+                      ["transportversicherung", "Transportversicherung (erweitert)"],
+                    ].map(([key, label]) => (
+                      <label className="item-row" key={key} style={{ cursor: "pointer" }}>
+                        <span>{label}</span>
+                        <input type="checkbox" checked={zusatz[key] || false} onChange={(e) => setZusatz((z) => ({ ...z, [key]: e.target.checked }))} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field" style={{ marginTop: 20 }}>
+                  <label htmlFor="sonstiges">Sonstiges (optional)</label>
+                  <textarea
+                    id="sonstiges"
+                    rows={2}
+                    placeholder="z.B. Klavier, Tresor, Sondermüll, besondere Wünsche…"
+                    value={sonstiges}
+                    onChange={(e) => setSonstiges(e.target.value)}
+                    style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid var(--border)", fontFamily: "inherit" }}
+                  />
+                </div>
+
+                <div className="field" style={{ marginTop: 20 }}>
+                  <label>Wunschtermin</label>
                   <TerminPicker value={wunschtermin} onChange={setWunschtermin} />
                 </div>
 
+                <div className="calc-row-3" style={{ marginTop: 16 }}>
+                  <div className="field">
+                    <label htmlFor="rabattcode">Rabattcode (optional)</label>
+                    <input id="rabattcode" type="text" placeholder="optional" value={rabattcodeInput} onChange={(e) => setRabattcodeInput(e.target.value)} />
+                  </div>
+                </div>
+
                 <button className="calc-submit" type="submit" disabled={loading}>
-                  {loading ? "Berechne…" : "Entfernung berechnen"}
+                  {loading ? "Berechne…" : "Preis berechnen →"}
                 </button>
 
                 {error && <div className="calc-error">{error}</div>}
               </form>
 
-              {result && (
+              {breakdown && (
                 <div className="calc-result">
-                  <div className="calc-result-head">Ihre Umzugsdaten</div>
-                  <div className="calc-result-grid">
-                    <div className="calc-result-item">
-                      <div className="k">Entfernung</div>
-                      <div className="v">{result.km} km</div>
-                    </div>
-                    <div className="calc-result-item">
-                      <div className="k">Etagen-Differenz</div>
-                      <div className="v">{result.etagenDiff}</div>
-                    </div>
-                    <div className="calc-result-item">
-                      <div className="k">Kundentyp</div>
-                      <div className="v" style={{ fontSize: 16 }}>
-                        {kundentyp === "gewerbe" ? "Gewerbe" : "Privat"}
-                      </div>
-                    </div>
+                  <div className="calc-result-head">Deine Preisaufschlüsselung</div>
+                  <div style={{ padding: 20 }}>
+                    <div className="belegzeile"><span>Grundpreis (Fixkosten)</span><span>{breakdown.grundpreis.toFixed(2)} €</span></div>
+                    <div className="belegzeile"><span>{breakdown.umfangLabel}</span><span>{breakdown.umfang.toFixed(2)} €</span></div>
+                    {breakdown.etagenOhneAufzug > 0 && (
+                      <div className="belegzeile"><span>Etagenzuschlag: {breakdown.etagenOhneAufzug} Etage(n) ohne Aufzug ({prices.etagenzuschlag.price}%)</span><span>{breakdown.etagenzuschlag.toFixed(2)} €</span></div>
+                    )}
+                    {breakdown.km > 0 && (
+                      <div className="belegzeile"><span>Transport: {breakdown.km} km × {(breakdown.fernumzug ? prices.proKmFern.price : prices.proKm.price).toFixed(2)} €/km{breakdown.fernumzug ? " (Fernumzug)" : ""}</span><span>{breakdown.transport.toFixed(2)} €</span></div>
+                    )}
+                    {breakdown.zusatzLabels.map((l, i) => (
+                      <div className="belegzeile" key={i}><span>{l}</span></div>
+                    ))}
+                    {breakdown.rabattBetrag > 0 && (
+                      <div className="belegzeile"><span>Rabattcode</span><span>− {breakdown.rabattBetrag.toFixed(2)} €</span></div>
+                    )}
+                    <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}><span>Netto</span><span>{breakdown.netto.toFixed(2)} €</span></div>
+                    <div className="belegzeile"><span>zzgl. USt ({breakdown.mwstSatz}%)</span><span>{breakdown.mwstBetrag.toFixed(2)} €</span></div>
+                    <div className="belegzeile" style={{ fontWeight: 700, fontSize: 16 }}><span>Gesamt</span><span>{breakdown.brutto.toFixed(2)} €</span></div>
+                    <div className="belegzeile"><span>Anzahlung ({prices.anzahlung.price}%)</span><span>{breakdown.anzahlung.toFixed(2)} €</span></div>
                   </div>
                   <div className="calc-note">
-                    Entfernung als Luftlinie berechnet (Kartendaten: OpenStreetMap
-                    Nominatim). Für ein verbindliches Angebot inkl. Anfahrtsweg
-                    melden wir uns persönlich bei Ihnen.
+                    Unverbindliche Schätzung. Zahlungsabwicklung folgt in Kürze — aktuell melden wir uns nach deiner Anfrage persönlich bei dir.
                   </div>
-
-                  {prices && (
-                    <div className="price-highlight">
-                      <div className="k">Geschätzter Richtpreis</div>
-                      <div className="v">{computePrice()} €</div>
-                      <div className="note-inline">
-                        Unverbindliche Schätzung, kein Festpreis.
-                      </div>
-                    </div>
-                  )}
 
                   <div className="contact-box">
                     <div className="contact-title">Unverbindliche Anfrage senden</div>
                     {sendSuccess ? (
-                      <div className="send-success">
-                        Danke! Deine Anfrage ist bei uns eingegangen — wir melden
-                        uns zeitnah bei dir.
-                      </div>
+                      <div className="send-success">Danke! Deine Anfrage ist eingegangen — wir melden uns zeitnah. Du findest sie ab sofort unter „Meine Aufträge".</div>
                     ) : (
                       <>
                         <div className="calc-row-3">
                           <div className="field">
                             <label htmlFor="name">Name (optional)</label>
-                            <input
-                              id="name"
-                              type="text"
-                              placeholder="Dein Name"
-                              value={name}
-                              onChange={(e) => setName(e.target.value)}
-                            />
+                            <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
                           </div>
                           <div className="field">
                             <label htmlFor="contactEmail">E-Mail (optional)</label>
-                            <input
-                              id="contactEmail"
-                              type="email"
-                              placeholder="Für Rückmeldung"
-                              value={contactEmail}
-                              onChange={(e) => setContactEmail(e.target.value)}
-                            />
+                            <input id="contactEmail" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
                           </div>
                           <div className="field">
                             <label htmlFor="telefon">Telefon (optional)</label>
-                            <input
-                              id="telefon"
-                              type="text"
-                              placeholder="Für Rückruf"
-                              value={telefon}
-                              onChange={(e) => setTelefon(e.target.value)}
-                            />
+                            <input id="telefon" type="text" value={telefon} onChange={(e) => setTelefon(e.target.value)} />
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          className="calc-submit"
-                          style={{ marginTop: 16 }}
-                          disabled={sending}
-                          onClick={handleSendRequest}
-                        >
+                        <button type="button" className="calc-submit" style={{ marginTop: 16 }} disabled={sending} onClick={handleSendRequest}>
                           {sending ? "Sende…" : "Unverbindliche Anfrage senden"}
                         </button>
                         {sendError && <div className="calc-error">{sendError}</div>}
@@ -541,52 +541,58 @@ export default function Home() {
       <section className="services" id="leistungen">
         <div className="wrap">
           <div className="section-title">
-            <h2>Unsere Leistungen</h2>
-            <p>Von der Kiste bis zum Klavier — wir kümmern uns.</p>
+            <h2>Zwei Leistungen, ein transparenter Preis</h2>
+            <p>Berechne wahlweise nach Fläche (m²) oder nach einzelnen Gegenständen.</p>
           </div>
           <div className="service-grid">
             <div className="service-card">
               <div className="service-icon yellow" />
-              <h3>Privatumzug</h3>
-              <p>Vollservice für Wohnungen und Häuser, termingerecht und sorgfältig.</p>
+              <h3>Umzug</h3>
+              <p>Privat- oder Firmenumzug — inklusive Entfernung &amp; Etagen.</p>
             </div>
             <div className="service-card">
               <div className="service-icon red" />
-              <h3>Firmenumzug</h3>
-              <p>Büros und Betriebe mit minimaler Ausfallzeit umziehen.</p>
-            </div>
-            <div className="service-card">
-              <div className="service-icon yellow" />
-              <h3>Möbellift</h3>
-              <p>Sperrige Möbel sicher über den Balkon statt durchs Treppenhaus.</p>
-            </div>
-            <div className="service-card">
-              <div className="service-icon red" />
-              <h3>Halteverbotszone</h3>
-              <p>Wir organisieren die Halteverbotszone für einen reibungslosen Start.</p>
+              <h3>Entsorgung</h3>
+              <p>Entrümpelung &amp; Haushaltsauflösung, fachgerecht entsorgt.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="cta-strip" id="kontakt">
-        <div className="wrap">
-          <h2>Bereit für Ihren Umzug?</h2>
-          <p>Kontaktieren Sie uns für ein persönliches, unverbindliches Angebot.</p>
-          <div className="btn-row">
-            <a className="btn primary" href="mailto:info@umzugplus.de">
-              Angebot anfragen
-            </a>
-            <a className="btn ghost" href="tel:+4900000000">
-              Anrufen
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <footer>
-        <div className="wrap">© {new Date().getFullYear()} UmzugPlus · info@umzugplus.de</div>
-      </footer>
+      <Footer />
     </>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="site-footer" id="footer-kontakt">
+      <div className="wrap footer-grid">
+        <div>
+          <div className="foot-name">UmzugPlus</div>
+          <p>Umzug &amp; Entsorgung zum transparenten Festpreis — online berechnen, online buchen.</p>
+        </div>
+        <div>
+          <div className="foot-heading">Leistungen</div>
+          <a href="#rechner">Umzug</a>
+          <a href="#rechner">Entsorgung</a>
+          <a href="#leistungen">So funktioniert's</a>
+        </div>
+        <div>
+          <div className="foot-heading">Rechtliches</div>
+          <a href="#">Impressum</a>
+          <a href="#">Datenschutz</a>
+          <a href="#">AGB &amp; Widerruf</a>
+        </div>
+        <div>
+          <div className="foot-heading">Kontakt</div>
+          <a href="mailto:info@umzugplus.de">info@umzugplus.de</a>
+        </div>
+      </div>
+      <div className="wrap footer-bottom">
+        <span>© {new Date().getFullYear()} UmzugPlus. Alle Rechte vorbehalten.</span>
+        <span>Transparent · Fair · DSGVO-konform</span>
+      </div>
+    </footer>
   );
 }
