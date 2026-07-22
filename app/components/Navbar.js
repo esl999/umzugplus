@@ -34,7 +34,7 @@ export default function Navbar() {
         ) : session ? (
           <div className="auth-buttons">
             <Link className="nav-cta" href="/konto/auftraege">Meine Aufträge</Link>
-            <Link className="nav-cta ghost" href="/konto">Konto</Link>
+            <Link className="nav-cta ghost" href="/konto">Mein Profil</Link>
             <button className="nav-cta ghost" onClick={handleLogout}>Abmelden</button>
           </div>
         ) : (

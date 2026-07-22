@@ -1103,11 +1103,10 @@ button.nav-cta {
   max-width: 700px;
   margin: 0 auto;
   background: white;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 44px;
-  color: #111;
-  filter: grayscale(1);
+  border-top: 6px solid var(--red);
 }
 
 .beleg-head {
@@ -1121,18 +1120,18 @@ button.nav-cta {
   font-family: var(--display);
   font-weight: 800;
   font-size: 22px;
-  color: #000;
+  color: var(--red);
   letter-spacing: -0.01em;
-  border: 2px solid #000;
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 6px;
+}
+
+.beleg-logo .plus-dot {
+  color: var(--yellow-dark);
 }
 
 .beleg-address {
   text-align: right;
   font-size: 12px;
-  color: #444;
+  color: var(--text-dim);
   line-height: 1.6;
 }
 
@@ -1302,6 +1301,33 @@ button.nav-cta {
   cursor: not-allowed;
   background: var(--red-soft);
   border-color: var(--red-soft);
+}
+
+.kategorie-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kategorie-tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: white;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.kategorie-tab:hover {
+  border-color: var(--yellow-dark);
+}
+
+.kategorie-tab.active {
+  background: var(--red);
+  border-color: var(--red);
+  color: white;
 }
 
 /* ---------- Services ---------- */

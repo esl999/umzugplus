@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { useAvailability, WEEKDAYS, MONTHS } from "../lib/availability";
 
-export default function TerminPicker({ value, onChange }) {
+export default function TerminPicker({ value, onChange, requiredCapacity = 1 }) {
   const [month, setMonth] = useState(() => {
     const d = new Date();
     d.setDate(1);
     return d;
   });
-  const { loading, days, maxPerDay, counts, statusFor, toISO } = useAvailability(month);
+  const { loading, days, maxPerDay, counts, statusFor, toISO } = useAvailability(month, requiredCapacity);
 
   const firstWeekday = days.length > 0 ? days[0].getDay() : 0;
   const leadingBlanks = firstWeekday;

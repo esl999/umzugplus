@@ -72,7 +72,11 @@ export default function AdminPage() {
 
   async function deleteAnfrage(id, bookingNumber) {
     if (!confirm(`Auftrag ${bookingNumber} wirklich unwiderruflich löschen? Er verschwindet auch beim Kunden und aus dem Umsatz.`)) return;
-    await supabase.from("anfragen").delete().eq("id", id);
+    const { error } = await supabase.from("anfragen").delete().eq("id", id);
+    if (error) {
+      alert("Löschen fehlgeschlagen: " + error.message);
+      return;
+    }
     setAnfragen((prev) => prev.filter((r) => r.id !== id));
     await logAction(session.user.email, "anfrage.geloescht", bookingNumber);
   }
@@ -108,14 +112,18 @@ export default function AdminPage() {
     const now = new Date();
     const thisMonth = anfragen.filter((a) => {
       const d = new Date(a.created_at);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && a.status !== "storniert";
+      return (
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear() &&
+        a.status === "abgeschlossen" &&
+        (a.bezahlt_betrag || 0) >= (a.geschaetzter_preis || 0)
+      );
     });
     const umsatz = thisMonth.reduce((sum, a) => sum + (a.geschaetzter_preis || 0), 0);
     const offen = anfragen.filter((a) => a.status === "neu").length;
     const beschwerdenOffen = beschwerden.filter((b) => b.status === "offen").length;
     return { umsatz, offen, beschwerdenOffen, total: anfragen.length };
   }, [anfragen, beschwerden]);
-
 
   if (loading || !isAdmin) {
     return (
@@ -131,7 +139,7 @@ export default function AdminPage() {
         <h1 className="admin-title">Admin-Bereich</h1>
 
         <div className="admin-stats">
-          <div className="admin-stat"><div className="k">Umsatz (Monat)</div><div className="v">{stats.umsatz.toFixed(2)} €</div></div>
+          <div className="admin-stat"><div className="k">Umsatz (abgeschlossen &amp; bezahlt)</div><div className="v">{stats.umsatz.toFixed(2)} €</div></div>
           <div className="admin-stat"><div className="k">Offene Angebote</div><div className="v">{stats.offen}</div></div>
           <div className="admin-stat"><div className="k">Beschwerden offen</div><div className="v">{stats.beschwerdenOffen}</div></div>
           <div className="admin-stat"><div className="k">Aufträge gesamt</div><div className="v">{stats.total}</div></div>
@@ -565,6 +573,7 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
   const [messages, setMessages] = useState([]);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  const [filter, setFilter] = useState("aktuell");
 
   async function open(b) {
     setOpenId(b.id);
@@ -595,13 +604,31 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
     await supabase.from("beschwerden").update({ status }).eq("id", id);
     await logAction(actorEmail, "beschwerde.status", `${id} -> ${status}`);
     onChanged();
+    if (status === "geschlossen") setOpenId(null);
   }
 
-  if (beschwerden.length === 0) return <p className="auth-sub">Keine Beschwerden vorhanden.</p>;
+  const filtered = beschwerden.filter((b) => {
+    if (filter === "alle") return true;
+    if (filter === "aktuell") return b.status !== "geschlossen";
+    return b.status === filter;
+  });
 
   return (
     <div>
-      {beschwerden.map((b) => (
+      <div className="admin-toolbar">
+        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="aktuell">Aktuell (ohne geschlossene)</option>
+          <option value="alle">Alle</option>
+          <option value="offen">Offen</option>
+          <option value="in_bearbeitung">In Bearbeitung</option>
+          <option value="geloest">Gelöst</option>
+          <option value="geschlossen">Geschlossen</option>
+        </select>
+      </div>
+
+      {filtered.length === 0 && <p className="auth-sub">Keine Beschwerden in dieser Ansicht.</p>}
+
+      {filtered.map((b) => (
         <div key={b.id} className="calc-result" style={{ marginBottom: 20 }}>
           <div className="calc-result-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>Beschwerde zu Auftrag {b.anfrage_id.slice(0, 8)}…</span>
@@ -657,6 +684,7 @@ function AdminKatalog({ actorEmail }) {
   const [newKategorie, setNewKategorie] = useState("");
   const [newPreis, setNewPreis] = useState("");
   const [adding, setAdding] = useState(false);
+  const [activeKategorie, setActiveKategorie] = useState(null);
 
   useEffect(() => {
     load();
@@ -702,10 +730,13 @@ function AdminKatalog({ actorEmail }) {
 
   if (loadingItems) return <div>Lade Katalog…</div>;
 
+  const kategorien = [...new Set(items.map((i) => i.kategorie))];
+  const visible = activeKategorie ? items.filter((i) => i.kategorie === activeKategorie) : [];
+
   return (
     <div style={{ marginBottom: 32 }}>
       <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>
-        Gegenstände — Katalog ({items.length})
+        Gegenstände &amp; Leistungen — Katalog ({items.length})
       </div>
 
       <div className="admin-toolbar">
@@ -715,27 +746,44 @@ function AdminKatalog({ actorEmail }) {
         <button className="btn primary" onClick={addItem} disabled={adding}>+ Anlegen</button>
       </div>
 
-      <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        {items.map((item) => (
-          <div className="price-row" key={item.id} style={{ opacity: item.aktiv ? 1 : 0.5 }}>
-            <div>
-              <div className="price-row-label">{item.name}</div>
-              <div className="admin-sub">{item.kategorie}</div>
-            </div>
-            <div className="price-row-controls">
-              <input
-                type="number"
-                value={drafts[item.id] ?? item.preis}
-                onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
-              />
-              <button className="btn primary" onClick={() => saveItem(item.id)}>Speichern</button>
-              <button className="small-btn" onClick={() => toggleActive(item)}>
-                {item.aktiv ? "Deaktivieren" : "Aktivieren"}
-              </button>
-            </div>
-          </div>
+      <div className="kategorie-tabs" style={{ marginBottom: 14 }}>
+        {kategorien.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={"kategorie-tab" + (activeKategorie === k ? " active" : "")}
+            onClick={() => setActiveKategorie(k)}
+          >
+            {k} ({items.filter((i) => i.kategorie === k).length})
+          </button>
         ))}
       </div>
+
+      {!activeKategorie ? (
+        <p className="mini-note">Wähle oben eine Kategorie, um die Artikel zu bearbeiten.</p>
+      ) : (
+        <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {visible.map((item) => (
+            <div className="price-row" key={item.id} style={{ opacity: item.aktiv ? 1 : 0.5 }}>
+              <div>
+                <div className="price-row-label">{item.name}</div>
+                <div className="admin-sub">{item.kategorie}</div>
+              </div>
+              <div className="price-row-controls">
+                <input
+                  type="number"
+                  value={drafts[item.id] ?? item.preis}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
+                />
+                <button className="btn primary" onClick={() => saveItem(item.id)}>Speichern</button>
+                <button className="small-btn" onClick={() => toggleActive(item)}>
+                  {item.aktiv ? "Deaktivieren" : "Aktivieren"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

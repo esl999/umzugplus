@@ -34,7 +34,7 @@ function startOfDay(d) {
   return x;
 }
 
-export function useAvailability(month) {
+export function useAvailability(month, requiredCapacity = 1) {
   const [loading, setLoading] = useState(true);
   const [maxPerDay, setMaxPerDay] = useState(2);
   const [closedWeekday, setClosedWeekday] = useState(0);
@@ -51,7 +51,7 @@ export function useAvailability(month) {
       supabase.from("blocked_days").select("day").gte("day", toISO(monthStart)).lte("day", toISO(monthEnd)),
       supabase
         .from("anfragen")
-        .select("wunschtermin")
+        .select("wunschtermin, kapazitaet_bedarf")
         .neq("status", "storniert")
         .gte("wunschtermin", toISO(monthStart))
         .lte("wunschtermin", toISO(monthEnd)),
@@ -66,7 +66,7 @@ export function useAvailability(month) {
     const c = {};
     (anfragenRes.data || []).forEach((r) => {
       if (!r.wunschtermin) return;
-      c[r.wunschtermin] = (c[r.wunschtermin] || 0) + 1;
+      c[r.wunschtermin] = (c[r.wunschtermin] || 0) + (r.kapazitaet_bedarf || 1);
     });
     setCounts(c);
     setLoading(false);
@@ -89,7 +89,7 @@ export function useAvailability(month) {
     if (date.getDay() === closedWeekday) return "closed";
     if (blocked.has(iso)) return "blocked";
     const count = counts[iso] || 0;
-    if (count >= maxPerDay) return "full";
+    if (count + requiredCapacity > maxPerDay) return "full";
     return "free";
   }
 

@@ -67,7 +67,7 @@ export default function KontoPage() {
   return (
     <div className="auth-page">
       <div className="auth-card" style={{ maxWidth: 640 }}>
-        <h1>Mein Konto</h1>
+        <h1>Mein Profil</h1>
         <p className="auth-sub">Deine Kontodaten im Überblick.</p>
 
         <div className="field">
