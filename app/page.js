@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./lib/supabaseClient";
+import TerminPicker from "./components/TerminPicker";
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -133,6 +134,7 @@ export default function Home() {
   const [flaeche, setFlaeche] = useState("");
   const [gegenstaende, setGegenstaende] = useState({});
   const [name, setName] = useState("");
+  const [wunschtermin, setWunschtermin] = useState("");
   const [telefon, setTelefon] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [result, setResult] = useState(null);
@@ -237,6 +239,7 @@ export default function Home() {
         berechnungsart,
         flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
         gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
+        wunschtermin: wunschtermin || null,
         geschaetzter_preis: computePrice(),
         name: name || null,
         email: contactEmail || null,
@@ -426,6 +429,11 @@ export default function Home() {
                     ))}
                   </div>
                 )}
+
+                <div className="field" style={{ marginTop: 20 }}>
+                  <label>Wunschtermin (optional, hilft bei der Planung)</label>
+                  <TerminPicker value={wunschtermin} onChange={setWunschtermin} />
+                </div>
 
                 <button className="calc-submit" type="submit" disabled={loading}>
                   {loading ? "Berechne…" : "Entfernung berechnen"}

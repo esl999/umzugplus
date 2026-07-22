@@ -89,6 +89,10 @@ export default function KontoPage() {
           {saved && <div className="send-success" style={{ marginTop: 14 }}>Gespeichert.</div>}
         </form>
 
+        <p className="auth-switch">
+          <Link href="/konto/auftraege">Meine Aufträge ansehen →</Link>
+        </p>
+
         {isAdmin && (
           <p className="auth-switch">
             Du bist Admin. <Link href="/admin">Zum Admin-Bereich</Link>
