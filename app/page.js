@@ -347,35 +347,46 @@ export default function Home() {
     try {
       const breakdown = computeBreakdown();
 
-      const { error: insertError } = await supabase.from("anfragen").insert({
-        user_id: session.user.id,
-        kundentyp,
-        leistung,
-        von: leistung === "umzug" ? von : objektAdresse,
-        nach: leistung === "umzug" ? nach : null,
-        objekt_adresse: leistung !== "umzug" ? objektAdresse : null,
-        entfernung_km: Number(result.km),
-        etage_von: etageVon,
-        etage_nach: etageNach,
-        aufzug_von: vonAufzug,
-        aufzug_nach: nachAufzug,
-        berechnungsart,
-        flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
-        gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
-        zusatzleistungen: zusatz,
-        mitarbeiter,
-        kapazitaet_bedarf: zweitransporter ? 2 : 1,
-        wunschtermin: wunschtermin || null,
-        rabattcode: result.rabatt ? result.rabatt.code : null,
-        geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
-        preis_details: breakdown,
-        bezahlt_betrag: 0,
-        name: name.trim(),
-        email: contactEmail || session.user.email,
-        telefon: telefon.trim(),
-      });
+      const { data: newOrder, error: insertError } = await supabase
+        .from("anfragen")
+        .insert({
+          user_id: session.user.id,
+          kundentyp,
+          leistung,
+          von: leistung === "umzug" ? von : objektAdresse,
+          nach: leistung === "umzug" ? nach : null,
+          objekt_adresse: leistung !== "umzug" ? objektAdresse : null,
+          entfernung_km: Number(result.km),
+          etage_von: etageVon,
+          etage_nach: etageNach,
+          aufzug_von: vonAufzug,
+          aufzug_nach: nachAufzug,
+          berechnungsart,
+          flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
+          gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
+          zusatzleistungen: zusatz,
+          mitarbeiter,
+          kapazitaet_bedarf: zweitransporter ? 2 : 1,
+          wunschtermin: wunschtermin || null,
+          rabattcode: result.rabatt ? result.rabatt.code : null,
+          geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
+          preis_details: breakdown,
+          bezahlt_betrag: 0,
+          name: name.trim(),
+          email: contactEmail || session.user.email,
+          telefon: telefon.trim(),
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
+
+      fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anfrageId: newOrder.id, type: "angebot" }),
+      }).catch(() => {});
+
       setSendSuccess(true);
     } catch (err) {
       setSendError("Die Anfrage konnte nicht gesendet werden. Bitte versuch es erneut.");

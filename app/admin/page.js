@@ -71,6 +71,14 @@ export default function AdminPage() {
     setAnfragen((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     await supabase.from("anfragen").update(patch).eq("id", id);
     logAction(session.user.email, "anfrage.status", `${id} -> ${status}`);
+
+    if (status === "bestaetigt") {
+      fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anfrageId: id, type: "auftragsbestaetigung" }),
+      }).catch(() => {});
+    }
   }
 
   async function deleteAnfrage(id, bookingNumber) {
@@ -910,10 +918,21 @@ function PaymentCell({ order, actorEmail, onUpdated }) {
 
   async function setBezahlt(betrag, extra) {
     setBusy(true);
-    const patch = { bezahlt_betrag: Math.round(betrag * 100) / 100, ...extra };
+    const rundedBetrag = Math.round(betrag * 100) / 100;
+    const patch = { bezahlt_betrag: rundedBetrag, ...extra };
     await supabase.from("anfragen").update(patch).eq("id", order.id);
     await logAction(actorEmail, "zahlung.update", `${order.booking_number} -> ${betrag}€`);
     onUpdated(patch);
+
+    if (rundedBetrag > 0) {
+      const emailType = rundedBetrag >= gesamt ? "rechnung" : "anzahlungsbestaetigung";
+      fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anfrageId: order.id, type: emailType }),
+      }).catch(() => {});
+    }
+
     setBusy(false);
     setOpen(false);
   }
