@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { supabase } from "./lib/supabaseClient";
 import TerminPicker from "./components/TerminPicker";
 import { useLanguage } from "./lib/i18n";
@@ -147,7 +148,6 @@ export default function Home() {
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sendError, setSendError] = useState("");
   const [session, setSession] = useState(undefined);
-  const [crossSellTarget, setCrossSellTarget] = useState(null);
 
   const rechnerRef = useRef(null);
 
@@ -172,6 +172,16 @@ export default function Home() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_e, sess) => setSession(sess));
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const l = params.get("leistung");
+    if (l && ["umzug", "entsorgung", "reinigung"].includes(l)) {
+      setLeistung(l);
+      setTimeout(() => rechnerRef.current?.scrollIntoView({ behavior: "smooth" }), 400);
+    }
   }, []);
 
   function scrollToRechner(l) {
@@ -443,6 +453,43 @@ export default function Home() {
         body: JSON.stringify({ anfrageId: newOrder.id, type: "angebot" }),
       }).catch(() => {});
 
+      if (comboExtras.length > 0) {
+        const extraRows = comboExtras.map((e) => ({
+          user_id: session.user.id,
+          kundentyp,
+          leistung: e.leistung,
+          von: e.adresse,
+          objekt_adresse: e.adresse,
+          entfernung_km: 0,
+          etage_von: "0",
+          etage_nach: "0",
+          aufzug_von: false,
+          aufzug_nach: false,
+          berechnungsart: "flaeche",
+          flaeche: e.flaeche,
+          mitarbeiter: 2,
+          kapazitaet_bedarf: 1,
+          wunschtermin: wunschtermin || null,
+          wunschtermin_uhrzeit: wunschtermin ? wunschterminUhrzeit : null,
+          geschaetzter_preis: Math.round(e.brutto * 100) / 100,
+          preis_details: e,
+          bezahlt_betrag: 0,
+          name: name.trim(),
+          email: contactEmail || session.user.email,
+          telefon: telefon.trim(),
+          kombi_referenz: newOrder.id,
+        }));
+        const { data: extraOrders } = await supabase.from("anfragen").insert(extraRows).select();
+        (extraOrders || []).forEach((eo) => {
+          fetch("/api/email/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ anfrageId: eo.id, type: "angebot" }),
+          }).catch(() => {});
+        });
+        await supabase.from("anfragen").update({ kombi_referenz: newOrder.id }).eq("id", newOrder.id);
+      }
+
       setSendSuccess(true);
     } catch (err) {
       setSendError("Die Anfrage konnte nicht gesendet werden. Bitte versuch es erneut.");
@@ -451,25 +498,59 @@ export default function Home() {
     }
   }
 
-  function startCrossSell(target) {
-    if (leistung === "umzug") {
-      setCrossSellTarget(target);
-    } else {
-      const addr = objektAdresse;
-      resetLeistungState(target);
-      if (target === "umzug") setVon(addr);
-      else setObjektAdresse(addr);
-      rechnerRef.current?.scrollIntoView({ behavior: "smooth" });
+  const [comboExtras, setComboExtras] = useState([]);
+  const [comboFormLeistung, setComboFormLeistung] = useState(null);
+  const [comboFormAdresse, setComboFormAdresse] = useState("");
+  const [comboFormFlaeche, setComboFormFlaeche] = useState("");
+  const [comboLoading, setComboLoading] = useState(false);
+  const [comboError, setComboError] = useState("");
+
+  const leistungLabelMap = leistungLabels;
+
+  function openComboForm(target) {
+    setComboFormLeistung(target);
+    setComboFormAdresse(leistung === "umzug" ? nach : objektAdresse);
+    setComboFormFlaeche("");
+    setComboError("");
+  }
+
+  function computeExtraBreakdown(target, flaecheWert) {
+    const grundpreis = target === "entsorgung" ? prices.grundpreisEntsorgung.price : prices.grundpreisReinigung.price;
+    const proQm = target === "entsorgung" ? prices.proQmEntsorgung.price : prices.proQmReinigung.price;
+    const umfang = (Number(flaecheWert) || 0) * proQm;
+    let netto = grundpreis + umfang;
+    if (kundentyp === "gewerbe") netto = netto * (1 - prices.rabattGewerbe.price / 100);
+    const brutto = netto * (1 + prices.mwst.price / 100);
+    const gesamt = Math.max(brutto, prices.mindestauftragswert.price);
+    return { leistung: target, grundpreis, umfang, flaeche: Number(flaecheWert) || 0, proQm, netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt };
+  }
+
+  async function submitComboForm() {
+    setComboError("");
+    if (!comboFormAdresse.trim() || !comboFormFlaeche) {
+      setComboError("Bitte Adresse und Fläche angeben.");
+      return;
+    }
+    setComboLoading(true);
+    try {
+      const obj = await geocode(comboFormAdresse);
+      if (!obj.state.includes("Nordrhein-Westfalen")) {
+        setComboError("Die Adresse muss in Nordrhein-Westfalen liegen.");
+        setComboLoading(false);
+        return;
+      }
+      const extraBreakdown = computeExtraBreakdown(comboFormLeistung, comboFormFlaeche);
+      setComboExtras((prev) => [...prev, { ...extraBreakdown, adresse: comboFormAdresse }]);
+      setComboFormLeistung(null);
+    } catch {
+      setComboError("Die Adresse konnte nicht gefunden werden.");
+    } finally {
+      setComboLoading(false);
     }
   }
 
-  function chooseCrossSellAddress(which) {
-    const addr = which === "start" ? von : nach;
-    const target = crossSellTarget;
-    resetLeistungState(target);
-    setObjektAdresse(addr);
-    setCrossSellTarget(null);
-    rechnerRef.current?.scrollIntoView({ behavior: "smooth" });
+  function removeComboExtra(index) {
+    setComboExtras((prev) => prev.filter((_, i) => i !== index));
   }
 
   const breakdown = result ? computeBreakdown() : null;
@@ -495,29 +576,29 @@ export default function Home() {
           </div>
 
           <div className="service-circles">
-            <div className="service-circle" onClick={() => scrollToRechner("umzug")}>
+            <Link href="/umzug" className="service-circle">
               <div className="service-circle-img service-circle-umzug">
                 <span className="service-circle-label">{t("hc_umzug_t")}</span>
               </div>
               <p>{t("hc_umzug_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
-            </div>
+              <span className="service-band-cta-dark">Mehr erfahren →</span>
+            </Link>
 
-            <div className="service-circle" onClick={() => scrollToRechner("entsorgung")}>
+            <Link href="/entsorgung" className="service-circle">
               <div className="service-circle-img service-circle-entsorgung">
                 <span className="service-circle-label">{t("hc_entsorgung_t")}</span>
               </div>
               <p>{t("hc_entsorgung_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
-            </div>
+              <span className="service-band-cta-dark">Mehr erfahren →</span>
+            </Link>
 
-            <div className="service-circle" onClick={() => scrollToRechner("reinigung")}>
+            <Link href="/reinigung" className="service-circle">
               <div className="service-circle-img service-circle-reinigung">
                 <span className="service-circle-label">{t("hc_reinigung_t")}</span>
               </div>
               <p>{t("hc_reinigung_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
-            </div>
+              <span className="service-band-cta-dark">Mehr erfahren →</span>
+            </Link>
           </div>
         </div>
       </section>
@@ -820,19 +901,64 @@ export default function Home() {
                     Unverbindliche Schätzung. Zahlungsabwicklung folgt in Kürze.
                   </div>
 
-                  {leistung !== "entsorgung" && !sendSuccess && (
-                    <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: 16, margin: "0 20px 20px" }}>
-                      <p style={{ fontSize: 13.5, marginBottom: 10 }}>{t("cross_frage")}</p>
-                      <button type="button" className="btn ghost" onClick={() => startCrossSell("entsorgung")}>
-                        {t("cross_btn")}
-                      </button>
-                      {crossSellTarget === "entsorgung" && leistung === "umzug" && (
-                        <div style={{ marginTop: 12 }}>
-                          <p style={{ fontSize: 13, marginBottom: 8 }}>{t("cross_adresse_frage")}</p>
-                          <div className="btn-row">
-                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>{t("btn_start")}</button>
-                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>{t("btn_ziel")}</button>
+                  {!sendSuccess && (
+                    <div className="combo-box">
+                      <div className="combo-box-title">Weitere Leistungen dazu buchen?</div>
+
+                      {comboExtras.length > 0 && (
+                        <div className="combo-summary">
+                          <div className="combo-summary-row">
+                            <span>{leistungLabelMap[leistung]}</span>
+                            <span>{breakdown.brutto.toFixed(2)} €</span>
                           </div>
+                          {comboExtras.map((e, i) => (
+                            <div className="combo-summary-row" key={i}>
+                              <span>{leistungLabelMap[e.leistung]} ({e.adresse.slice(0, 28)})</span>
+                              <span>
+                                {e.brutto.toFixed(2)} €
+                                <button type="button" className="combo-remove" onClick={() => removeComboExtra(i)}>✕</button>
+                              </span>
+                            </div>
+                          ))}
+                          <div className="combo-summary-row combo-total">
+                            <span>Kombinierter Gesamtpreis</span>
+                            <span>{(breakdown.brutto + comboExtras.reduce((s, e) => s + e.brutto, 0)).toFixed(2)} €</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="btn-row" style={{ marginTop: 12 }}>
+                        {["umzug", "entsorgung", "reinigung"]
+                          .filter((l) => l !== leistung && !comboExtras.some((e) => e.leistung === l))
+                          .map((l) => (
+                            <button key={l} type="button" className="btn ghost" onClick={() => openComboForm(l)}>
+                              + {leistungLabelMap[l]} dazu buchen
+                            </button>
+                          ))}
+                      </div>
+
+                      {comboFormLeistung && (
+                        <div className="combo-form">
+                          <p style={{ fontSize: 13, marginBottom: 10, fontWeight: 600 }}>
+                            {leistungLabelMap[comboFormLeistung]} — Details
+                          </p>
+                          <div className="calc-row-3">
+                            <div className="field" style={{ gridColumn: "span 2" }}>
+                              <label>Objekt-Adresse (NRW)</label>
+                              <input type="text" value={comboFormAdresse} onChange={(e) => setComboFormAdresse(e.target.value)} placeholder="Adresse eingeben" />
+                            </div>
+                            <div className="field">
+                              <label>Fläche (m²)</label>
+                              <input type="number" min="0" value={comboFormFlaeche} onChange={(e) => setComboFormFlaeche(e.target.value)} />
+                            </div>
+                          </div>
+                          <div className="btn-row" style={{ marginTop: 10 }}>
+                            <button type="button" className="btn primary" disabled={comboLoading} onClick={submitComboForm}>
+                              {comboLoading ? "Berechne…" : "Preis hinzufügen"}
+                            </button>
+                            <button type="button" className="btn ghost" onClick={() => setComboFormLeistung(null)}>Abbrechen</button>
+                          </div>
+                          {comboError && <div className="calc-error">{comboError}</div>}
                         </div>
                       )}
                     </div>
@@ -841,28 +967,9 @@ export default function Home() {
                   <div className="contact-box">
                     <div className="contact-title">{t("contact_title")}</div>
                     {sendSuccess ? (
-                      <>
-                        <div className="send-success">Danke! Deine Anfrage ist eingegangen — du findest sie ab sofort unter „Meine Aufträge".</div>
-                        <div style={{ marginTop: 18 }}>
-                          <p style={{ fontSize: 13.5, marginBottom: 10 }}>Möchtest du gleich auch eine der anderen Leistungen anfragen?</p>
-                          <div className="btn-row">
-                            {otherLeistungen.map((l) => (
-                              <button key={l} type="button" className="btn ghost" onClick={() => startCrossSell(l)}>
-                                Auch {leistungLabels[l]} anfragen
-                              </button>
-                            ))}
-                          </div>
-                          {crossSellTarget && (
-                            <div style={{ marginTop: 14 }}>
-                              <p style={{ fontSize: 13, marginBottom: 8 }}>Welche Adresse soll für {leistungLabels[crossSellTarget]} übernommen werden?</p>
-                              <div className="btn-row">
-                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>{t("btn_start")}</button>
-                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>{t("btn_ziel")}</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </>
+                      <div className="send-success">
+                        Danke! Deine Anfrage{comboExtras.length > 0 ? "n sind" : " ist"} eingegangen — du findest{comboExtras.length > 0 ? " sie" : " sie"} ab sofort unter „Meine Aufträge".
+                      </div>
                     ) : !session ? (
                       <>
                         <p style={{ fontSize: 13.5, color: "var(--text-dim)", marginBottom: 12 }}>
@@ -889,7 +996,7 @@ export default function Home() {
                           </div>
                         </div>
                         <button type="button" className="calc-submit" style={{ marginTop: 16 }} disabled={sending} onClick={handleSendRequest}>
-                          {sending ? t("contact_sending") : t("contact_submit")}
+                          {sending ? t("contact_sending") : comboExtras.length > 0 ? `Alle ${comboExtras.length + 1} Leistungen anfragen` : t("contact_submit")}
                         </button>
                         {sendError && <div className="calc-error">{sendError}</div>}
                       </>
@@ -952,9 +1059,9 @@ function Footer() {
         </div>
         <div>
           <div className="foot-heading">{t("footer_leistungen")}</div>
-          <a href="#rechner">{t("hc_umzug_t")}</a>
-          <a href="#rechner">{t("hc_entsorgung_t")}</a>
-          <a href="#rechner">{t("hc_reinigung_t")}</a>
+          <a href="/umzug">{t("hc_umzug_t")}</a>
+          <a href="/entsorgung">{t("hc_entsorgung_t")}</a>
+          <a href="/reinigung">{t("hc_reinigung_t")}</a>
           <a href="/so-funktioniert">So funktioniert's</a>
         </div>
         <div>
