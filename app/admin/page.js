@@ -586,6 +586,17 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState("aktuell");
+  const [profilesMap, setProfilesMap] = useState({});
+
+  useEffect(() => {
+    const ids = [...new Set(beschwerden.map((b) => b.user_id).filter(Boolean))];
+    if (ids.length === 0) return;
+    supabase.from("profiles").select("id, name, email").in("id", ids).then(({ data }) => {
+      const map = {};
+      (data || []).forEach((p) => (map[p.id] = p));
+      setProfilesMap(map);
+    });
+  }, [beschwerden]);
 
   async function open(b) {
     setOpenId(b.id);
@@ -640,10 +651,19 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
 
       {filtered.length === 0 && <p className="auth-sub">Keine Beschwerden in dieser Ansicht.</p>}
 
-      {filtered.map((b) => (
+      {filtered.map((b) => {
+        const kunde = profilesMap[b.user_id];
+        return (
         <div key={b.id} className="calc-result" style={{ marginBottom: 20 }}>
           <div className="calc-result-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Beschwerde zu Auftrag {b.anfrage_id.slice(0, 8)}…</span>
+            <span>
+              {kunde ? (
+                <Link href={`/admin/nutzer/${b.user_id}`} style={{ textDecoration: "underline" }}>
+                  {kunde.name || kunde.email}
+                </Link>
+              ) : "Unbekannter Nutzer"}
+              {kunde?.email && <span className="admin-sub"> · {kunde.email}</span>}
+            </span>
             <select
               value={b.status}
               onChange={(e) => changeStatus(b.id, e.target.value)}
@@ -683,7 +703,8 @@ function AdminBeschwerden({ beschwerden, actorEmail, onChanged }) {
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -961,11 +982,20 @@ function AdminBewertungen({ bewertungen, actorEmail, onChanged }) {
       {bewertungen.map((b) => (
         <div key={b.id} className="calc-result" style={{ opacity: b.sichtbar ? 1 : 0.55 }}>
           <div className="calc-result-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="sterne-anzeige">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <span key={i} className={i <= b.sterne ? "stern voll" : "stern leer"}>★</span>
-              ))}
-            </span>
+            <div>
+              <span className="sterne-anzeige">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <span key={i} className={i <= b.sterne ? "stern voll" : "stern leer"}>★</span>
+                ))}
+              </span>
+              {b.user_id && (
+                <div style={{ fontSize: 12.5, marginTop: 4 }}>
+                  <Link href={`/admin/nutzer/${b.user_id}`} style={{ textDecoration: "underline" }}>
+                    {b.name || "Kunde ansehen"}
+                  </Link>
+                </div>
+              )}
+            </div>
             <span className="admin-sub">{new Date(b.created_at).toLocaleDateString("de-DE")} · {b.sichtbar ? "sichtbar" : "ausgeblendet"}</span>
           </div>
           <div style={{ padding: 20 }}>

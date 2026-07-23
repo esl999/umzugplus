@@ -1430,76 +1430,92 @@ button.nav-cta {
   }
 }
 
-/* ---------- Leistungs-Banner (gestapelt, mit Farbthema) ---------- */
+/* ---------- Leistungen: 3 Kreise nebeneinander ---------- */
 
 .services-stack {
-  padding: 60px 0 0;
+  padding: 60px 0 70px;
   background: var(--bg-soft);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 
-.services-stack .section-title {
-  padding-bottom: 20px;
+.service-circles {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  margin-top: 30px;
 }
 
-.service-band {
-  position: relative;
-  padding: 56px 0;
+.service-circle {
+  width: 220px;
+  text-align: center;
   cursor: pointer;
-  color: white;
-  overflow: hidden;
-  transition: filter 0.15s ease;
 }
 
-.service-band:hover {
-  filter: brightness(1.05);
-}
-
-.service-band::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.07) 0 2px, transparent 2px 16px);
-  pointer-events: none;
-}
-
-.service-band-umzug { background: linear-gradient(120deg, #E08A34, #B95F12); }
-.service-band-entsorgung { background: linear-gradient(120deg, #4FA873, #2C7A50); }
-.service-band-reinigung { background: linear-gradient(120deg, #4C8FD9, #2C5FA8); }
-
-.service-band-inner {
+.service-circle-img {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
   position: relative;
-  z-index: 1;
-  max-width: 560px;
+  overflow: hidden;
+  border: 5px solid white;
+  box-shadow: 0 20px 40px -18px rgba(33, 31, 26, 0.4);
+  transition: transform 0.15s ease;
 }
 
-.service-band-icon {
-  font-size: 30px;
-  display: inline-block;
-  margin-bottom: 10px;
+.service-circle:hover .service-circle-img {
+  transform: translateY(-4px) scale(1.02);
 }
 
-.service-band h3 {
+.service-circle-umzug {
+  background-image: linear-gradient(rgba(224,138,52,0.3), rgba(185,95,18,0.6)), url("/images/umzug.jpg");
+  background-color: #cf7422;
+}
+.service-circle-entsorgung {
+  background-image: linear-gradient(rgba(79,168,115,0.3), rgba(44,122,80,0.6)), url("/images/entsorgung.jpg");
+  background-color: #3e9268;
+}
+.service-circle-reinigung {
+  background-image: linear-gradient(rgba(76,143,217,0.3), rgba(44,95,168,0.6)), url("/images/reinigung.jpg");
+  background-color: #3f77bc;
+}
+
+.service-circle-label {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  color: white;
   font-family: var(--display);
   font-weight: 800;
-  font-size: 28px;
-  margin-bottom: 8px;
+  font-size: 19px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
-.service-band p {
-  font-size: 15px;
-  opacity: 0.92;
-  max-width: 440px;
+.service-circle p {
+  margin-top: 16px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  min-height: 36px;
 }
 
-.service-band-cta {
+.service-band-cta-dark {
   display: inline-block;
-  margin-top: 18px;
+  margin-top: 4px;
   font-weight: 700;
-  font-size: 14px;
-  border-bottom: 2px solid rgba(255,255,255,0.6);
-  padding-bottom: 2px;
+  font-size: 13px;
+  color: var(--red);
+}
+
+@media (max-width: 720px) {
+  .service-circle, .service-circle-img {
+    width: 170px;
+    height: 170px;
+  }
+
 }
 
 .social-row {
@@ -1555,6 +1571,125 @@ button.nav-cta {
 
 .stern.leer {
   color: var(--border);
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nav-search {
+  position: relative;
+}
+
+.nav-search input {
+  width: 150px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg-soft);
+}
+
+.nav-search-results {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  width: 220px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -20px rgba(33, 31, 26, 0.35);
+  list-style: none;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.nav-search-results li {
+  padding: 10px 14px;
+  font-size: 13.5px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-search-results li:last-child { border-bottom: none; }
+.nav-search-results li:hover { background: var(--bg-soft); }
+
+.nav-lang, .nav-account {
+  position: relative;
+}
+
+.nav-lang-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.nav-account-btn {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.nav-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--red);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  min-width: 180px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px -20px rgba(33, 31, 26, 0.35);
+  list-style: none;
+  z-index: 50;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.nav-dropdown-menu li a,
+.nav-dropdown-menu li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-family: inherit;
+  background: none;
+  border: none;
+  color: var(--text);
+}
+
+.nav-dropdown-menu li a:hover,
+.nav-dropdown-menu li button:hover {
+  background: var(--bg-soft);
+}
+
+@media (max-width: 900px) {
+  .nav-search input { width: 110px; }
 }
 
 /* ---------- Services ---------- */

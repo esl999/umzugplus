@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./lib/supabaseClient";
 import TerminPicker from "./components/TerminPicker";
+import { useLanguage } from "./lib/i18n";
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -108,6 +109,7 @@ function AddressField({ id, label, placeholder, value, onChange }) {
 }
 
 export default function Home() {
+  const { t } = useLanguage();
   const [leistung, setLeistung] = useState("umzug");
   const [kundentyp, setKundentyp] = useState("privat");
   const [von, setVon] = useState("");
@@ -410,27 +412,24 @@ export default function Home() {
     <>
       <header className="hero">
         <div className="wrap">
-          <span className="badge">● Rechner kostenlos &amp; ohne Konto nutzbar</span>
+          <span className="badge">{t("hero_badge")}</span>
           <h1>
-            Umzug, Entsorgung &amp; Reinigung — <span className="accent">fair, transparent, sofort kalkuliert.</span>
+            {t("hero_title")} <span className="accent">{t("hero_title_accent")}</span>
           </h1>
-          <p className="lead">
-            Berechne deinen Preis in wenigen Klicks ganz ohne Konto. Für die verbindliche Anfrage eines
-            Angebots meldest du dich kurz kostenlos an.
-          </p>
+          <p className="lead">{t("hero_lead")}</p>
 
           <div className="hero-choice">
             <button className="hero-choice-btn" onClick={() => scrollToRechner("umzug")}>
-              <strong>Umzug</strong>
-              <span>Privat- oder Firmenumzug berechnen</span>
+              <strong>{t("hc_umzug_t")}</strong>
+              <span>{t("hc_umzug_d")}</span>
             </button>
             <button className="hero-choice-btn" onClick={() => scrollToRechner("entsorgung")}>
-              <strong>Entsorgung</strong>
-              <span>Entrümpelung &amp; Haushaltsauflösung</span>
+              <strong>{t("hc_entsorgung_t")}</strong>
+              <span>{t("hc_entsorgung_d")}</span>
             </button>
             <button className="hero-choice-btn" onClick={() => scrollToRechner("reinigung")}>
-              <strong>Reinigung</strong>
-              <span>Übergabereinigung beim Auszug</span>
+              <strong>{t("hc_reinigung_t")}</strong>
+              <span>{t("hc_reinigung_d")}</span>
             </button>
           </div>
         </div>
@@ -731,35 +730,34 @@ export default function Home() {
       <section className="services-stack" id="leistungen">
         <div className="wrap">
           <div className="section-title">
-            <h2>Drei Leistungen, ein transparenter Preis</h2>
-            <p>Berechne wahlweise nach Fläche (m²) oder nach einzelnen Positionen.</p>
+            <h2>{t("services_title")}</h2>
+            <p>{t("services_sub")}</p>
           </div>
-        </div>
 
-        <div className="service-band service-band-umzug" onClick={() => scrollToRechner("umzug")}>
-          <div className="wrap service-band-inner">
-            <span className="service-band-icon">🚚</span>
-            <h3>Umzug</h3>
-            <p>Privat- oder Firmenumzug — inklusive Entfernung &amp; Etagen.</p>
-            <span className="service-band-cta">Preis berechnen →</span>
-          </div>
-        </div>
+          <div className="service-circles">
+            <div className="service-circle" onClick={() => scrollToRechner("umzug")}>
+              <div className="service-circle-img service-circle-umzug">
+                <span className="service-circle-label">{t("hc_umzug_t")}</span>
+              </div>
+              <p>{t("hc_umzug_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
 
-        <div className="service-band service-band-entsorgung" onClick={() => scrollToRechner("entsorgung")}>
-          <div className="wrap service-band-inner">
-            <span className="service-band-icon">♻️</span>
-            <h3>Entsorgung</h3>
-            <p>Entrümpelung &amp; Haushaltsauflösung, fachgerecht entsorgt.</p>
-            <span className="service-band-cta">Preis berechnen →</span>
-          </div>
-        </div>
+            <div className="service-circle" onClick={() => scrollToRechner("entsorgung")}>
+              <div className="service-circle-img service-circle-entsorgung">
+                <span className="service-circle-label">{t("hc_entsorgung_t")}</span>
+              </div>
+              <p>{t("hc_entsorgung_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
 
-        <div className="service-band service-band-reinigung" onClick={() => scrollToRechner("reinigung")}>
-          <div className="wrap service-band-inner">
-            <span className="service-band-icon">✨</span>
-            <h3>Reinigung</h3>
-            <p>Übergabereinigung beim Auszug — sauber und mängelfrei abgeben.</p>
-            <span className="service-band-cta">Preis berechnen →</span>
+            <div className="service-circle" onClick={() => scrollToRechner("reinigung")}>
+              <div className="service-circle-img service-circle-reinigung">
+                <span className="service-circle-label">{t("hc_reinigung_t")}</span>
+              </div>
+              <p>{t("hc_reinigung_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -770,28 +768,29 @@ export default function Home() {
 }
 
 function Footer() {
+  const { t } = useLanguage();
   return (
     <footer className="site-footer" id="footer-kontakt">
       <div className="wrap footer-grid">
         <div>
           <div className="foot-name">UmzugPlus</div>
-          <p>Umzug, Entsorgung &amp; Reinigung zum transparenten Festpreis — online berechnen, online anfragen.</p>
+          <p>{t("footer_tagline")}</p>
         </div>
         <div>
-          <div className="foot-heading">Leistungen</div>
-          <a href="#rechner">Umzug</a>
-          <a href="#rechner">Entsorgung</a>
-          <a href="#rechner">Reinigung</a>
+          <div className="foot-heading">{t("footer_leistungen")}</div>
+          <a href="#rechner">{t("hc_umzug_t")}</a>
+          <a href="#rechner">{t("hc_entsorgung_t")}</a>
+          <a href="#rechner">{t("hc_reinigung_t")}</a>
           <a href="/so-funktioniert">So funktioniert's</a>
         </div>
         <div>
-          <div className="foot-heading">Rechtliches</div>
+          <div className="foot-heading">{t("footer_rechtliches")}</div>
           <a href="/impressum">Impressum</a>
           <a href="/datenschutz">Datenschutz</a>
           <a href="/agb">AGB &amp; Widerruf</a>
         </div>
         <div>
-          <div className="foot-heading">Kontakt</div>
+          <div className="foot-heading">{t("footer_kontakt")}</div>
           <a href="/ueber-uns">Über uns</a>
           <a href="mailto:info@umzugplus.de">info@umzugplus.de</a>
           <div className="social-row">
@@ -811,7 +810,7 @@ function Footer() {
         </div>
       </div>
       <div className="wrap footer-bottom">
-        <span>© {new Date().getFullYear()} UmzugPlus. Alle Rechte vorbehalten.</span>
+        <span>© {new Date().getFullYear()} UmzugPlus. {t("footer_rights")}</span>
         <span>Transparent · Fair · DSGVO-konform</span>
       </div>
     </footer>

@@ -132,6 +132,7 @@ export default function AuftragDetail() {
           sterne,
           text: bewertungText.trim() || null,
           bild_url: bildUrl,
+          name: order.name || session.user.email,
         })
         .select()
         .single();
