@@ -1471,16 +1471,23 @@ button.nav-cta {
 }
 
 .service-circle-umzug {
-  background-image: linear-gradient(rgba(224,138,52,0.3), rgba(185,95,18,0.6)), url("/images/umzug.jpg");
+  background-image: url("/images/umzug.jpg");
   background-color: #cf7422;
 }
 .service-circle-entsorgung {
-  background-image: linear-gradient(rgba(79,168,115,0.3), rgba(44,122,80,0.6)), url("/images/entsorgung.jpg");
+  background-image: url("/images/entsorgung.jpg");
   background-color: #3e9268;
 }
 .service-circle-reinigung {
-  background-image: linear-gradient(rgba(76,143,217,0.3), rgba(44,95,168,0.6)), url("/images/reinigung.jpg");
+  background-image: url("/images/reinigung.jpg");
   background-color: #3f77bc;
+}
+
+.service-circle-img::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 45%);
 }
 
 .service-circle-label {

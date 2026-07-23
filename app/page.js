@@ -417,45 +417,65 @@ export default function Home() {
             {t("hero_title")} <span className="accent">{t("hero_title_accent")}</span>
           </h1>
           <p className="lead">{t("hero_lead")}</p>
-
-          <div className="hero-choice">
-            <button className="hero-choice-btn" onClick={() => scrollToRechner("umzug")}>
-              <strong>{t("hc_umzug_t")}</strong>
-              <span>{t("hc_umzug_d")}</span>
-            </button>
-            <button className="hero-choice-btn" onClick={() => scrollToRechner("entsorgung")}>
-              <strong>{t("hc_entsorgung_t")}</strong>
-              <span>{t("hc_entsorgung_d")}</span>
-            </button>
-            <button className="hero-choice-btn" onClick={() => scrollToRechner("reinigung")}>
-              <strong>{t("hc_reinigung_t")}</strong>
-              <span>{t("hc_reinigung_d")}</span>
-            </button>
-          </div>
         </div>
       </header>
+
+      <section className="services-stack" id="leistungen">
+        <div className="wrap">
+          <div className="section-title">
+            <h2>{t("services_title")}</h2>
+            <p>{t("services_sub")}</p>
+          </div>
+
+          <div className="service-circles">
+            <div className="service-circle" onClick={() => scrollToRechner("umzug")}>
+              <div className="service-circle-img service-circle-umzug">
+                <span className="service-circle-label">{t("hc_umzug_t")}</span>
+              </div>
+              <p>{t("hc_umzug_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
+
+            <div className="service-circle" onClick={() => scrollToRechner("entsorgung")}>
+              <div className="service-circle-img service-circle-entsorgung">
+                <span className="service-circle-label">{t("hc_entsorgung_t")}</span>
+              </div>
+              <p>{t("hc_entsorgung_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
+
+            <div className="service-circle" onClick={() => scrollToRechner("reinigung")}>
+              <div className="service-circle-img service-circle-reinigung">
+                <span className="service-circle-label">{t("hc_reinigung_t")}</span>
+              </div>
+              <p>{t("hc_reinigung_d")}</p>
+              <span className="service-band-cta-dark">{t("service_cta")}</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="calc-section" id="rechner" ref={rechnerRef}>
         <div className="wrap">
           <div className="calc-card">
             <div className="calc-inner">
-              <div className="calc-title">Sofort-Preis berechnen</div>
-              <div className="calc-sub">Alle Preise kommen live aus unserem Katalog — transparent aufgeschlüsselt.</div>
+              <div className="calc-title">{t("calc_title")}</div>
+              <div className="calc-sub">{t("calc_sub")}</div>
 
               <div className="field" style={{ marginBottom: 20 }}>
-                <label>Leistung</label>
+                <label>{t("label_leistung")}</label>
                 <div className="segmented" style={{ maxWidth: 420 }}>
-                  <button type="button" className={leistung === "umzug" ? "active" : ""} onClick={() => resetLeistungState("umzug")}>Umzug</button>
-                  <button type="button" className={leistung === "entsorgung" ? "active" : ""} onClick={() => resetLeistungState("entsorgung")}>Entsorgung</button>
-                  <button type="button" className={leistung === "reinigung" ? "active" : ""} onClick={() => resetLeistungState("reinigung")}>Reinigung</button>
+                  <button type="button" className={leistung === "umzug" ? "active" : ""} onClick={() => resetLeistungState("umzug")}>{t("hc_umzug_t")}</button>
+                  <button type="button" className={leistung === "entsorgung" ? "active" : ""} onClick={() => resetLeistungState("entsorgung")}>{t("hc_entsorgung_t")}</button>
+                  <button type="button" className={leistung === "reinigung" ? "active" : ""} onClick={() => resetLeistungState("reinigung")}>{t("hc_reinigung_t")}</button>
                 </div>
               </div>
 
               <div className="field" style={{ marginBottom: 20 }}>
-                <label>Für wen?</label>
+                <label>{t("label_fuerwen")}</label>
                 <div className="segmented" style={{ maxWidth: 300 }}>
-                  <button type="button" className={kundentyp === "privat" ? "active" : ""} onClick={() => setKundentyp("privat")}>Privat</button>
-                  <button type="button" className={kundentyp === "gewerbe" ? "active" : ""} onClick={() => setKundentyp("gewerbe")}>Gewerblich</button>
+                  <button type="button" className={kundentyp === "privat" ? "active" : ""} onClick={() => setKundentyp("privat")}>{t("privat")}</button>
+                  <button type="button" className={kundentyp === "gewerbe" ? "active" : ""} onClick={() => setKundentyp("gewerbe")}>{t("gewerblich")}</button>
                 </div>
               </div>
 
@@ -507,15 +527,15 @@ export default function Home() {
                 )}
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label>Wie möchtest du berechnen?</label>
+                  <label>{t("label_berechnungsart")}</label>
                   <div className="method-cards">
                     <div className={"method-card" + (berechnungsart === "flaeche" ? " active" : "")} onClick={() => setBerechnungsart("flaeche")}>
-                      <h4>Nach Fläche (m²)</h4>
-                      <p>Schnell &amp; einfach — nur die Quadratmeterzahl.</p>
+                      <h4>{t("method_flaeche_t")}</h4>
+                      <p>{t("method_flaeche_d")}</p>
                     </div>
                     <div className={"method-card" + (berechnungsart === "gegenstaende" ? " active" : "")} onClick={() => setBerechnungsart("gegenstaende")}>
-                      <h4>Nach Positionen</h4>
-                      <p>Genauer — einzelne Gegenstände bzw. Leistungen auswählen.</p>
+                      <h4>{t("method_pos_t")}</h4>
+                      <p>{t("method_pos_d")}</p>
                     </div>
                   </div>
                 </div>
@@ -624,7 +644,7 @@ export default function Home() {
                 </div>
 
                 <button className="calc-submit" type="submit" disabled={loading}>
-                  {loading ? "Berechne…" : "Preis berechnen →"}
+                  {loading ? t("btn_berechne") : t("btn_preis_berechnen")}
                 </button>
 
                 {error && <div className="calc-error">{error}</div>}
@@ -632,7 +652,7 @@ export default function Home() {
 
               {breakdown && (
                 <div className="calc-result">
-                  <div className="calc-result-head">Deine Preisaufschlüsselung</div>
+                  <div className="calc-result-head">{t("result_head")}</div>
                   <div style={{ padding: 20 }}>
                     <div className="belegzeile"><span>Grundpreis (Fixkosten)</span><span>{breakdown.grundpreis.toFixed(2)} €</span></div>
                     <div className="belegzeile"><span>{breakdown.umfangLabel}</span><span>{breakdown.umfang.toFixed(2)} €</span></div>
@@ -654,17 +674,17 @@ export default function Home() {
                     {breakdown.rabattBetrag > 0 && (
                       <div className="belegzeile"><span>Rabattcode</span><span>− {breakdown.rabattBetrag.toFixed(2)} €</span></div>
                     )}
-                    <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}><span>Netto</span><span>{breakdown.netto.toFixed(2)} €</span></div>
+                    <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}><span>{t("netto_label")}</span><span>{breakdown.netto.toFixed(2)} €</span></div>
                     <div className="belegzeile"><span>zzgl. USt ({breakdown.mwstSatz}%)</span><span>{breakdown.mwstBetrag.toFixed(2)} €</span></div>
-                    <div className="belegzeile" style={{ fontWeight: 700, fontSize: 16 }}><span>Gesamt</span><span>{breakdown.brutto.toFixed(2)} €</span></div>
-                    <div className="belegzeile"><span>Anzahlung ({prices.anzahlung.price}%)</span><span>{breakdown.anzahlung.toFixed(2)} €</span></div>
+                    <div className="belegzeile" style={{ fontWeight: 700, fontSize: 16 }}><span>{t("gesamt_label")}</span><span>{breakdown.brutto.toFixed(2)} €</span></div>
+                    <div className="belegzeile"><span>{t("anzahlung_label")} ({prices.anzahlung.price}%)</span><span>{breakdown.anzahlung.toFixed(2)} €</span></div>
                   </div>
                   <div className="calc-note">
                     Unverbindliche Schätzung. Zahlungsabwicklung folgt in Kürze.
                   </div>
 
                   <div className="contact-box">
-                    <div className="contact-title">Verbindliches Angebot anfragen</div>
+                    <div className="contact-title">{t("contact_title")}</div>
                     {sendSuccess ? (
                       <>
                         <div className="send-success">Danke! Deine Anfrage ist eingegangen — du findest sie ab sofort unter „Meine Aufträge".</div>
@@ -691,10 +711,10 @@ export default function Home() {
                     ) : !session ? (
                       <>
                         <p style={{ fontSize: 13.5, color: "var(--text-dim)", marginBottom: 12 }}>
-                          Der Rechner ist frei nutzbar — für die verbindliche Anfrage eines Angebots ist ein kostenloses Konto nötig.
+                          {t("contact_login_prompt")}
                         </p>
                         <a className="calc-submit" href="/login" style={{ display: "block", textAlign: "center", textDecoration: "none" }}>
-                          Jetzt einloggen, um Angebot zu erhalten
+                          {t("contact_login_btn")}
                         </a>
                       </>
                     ) : (
@@ -714,7 +734,7 @@ export default function Home() {
                           </div>
                         </div>
                         <button type="button" className="calc-submit" style={{ marginTop: 16 }} disabled={sending} onClick={handleSendRequest}>
-                          {sending ? "Sende…" : "Verbindliches Angebot anfragen"}
+                          {sending ? t("contact_sending") : t("contact_submit")}
                         </button>
                         {sendError && <div className="calc-error">{sendError}</div>}
                       </>
@@ -722,41 +742,6 @@ export default function Home() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="services-stack" id="leistungen">
-        <div className="wrap">
-          <div className="section-title">
-            <h2>{t("services_title")}</h2>
-            <p>{t("services_sub")}</p>
-          </div>
-
-          <div className="service-circles">
-            <div className="service-circle" onClick={() => scrollToRechner("umzug")}>
-              <div className="service-circle-img service-circle-umzug">
-                <span className="service-circle-label">{t("hc_umzug_t")}</span>
-              </div>
-              <p>{t("hc_umzug_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
-            </div>
-
-            <div className="service-circle" onClick={() => scrollToRechner("entsorgung")}>
-              <div className="service-circle-img service-circle-entsorgung">
-                <span className="service-circle-label">{t("hc_entsorgung_t")}</span>
-              </div>
-              <p>{t("hc_entsorgung_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
-            </div>
-
-            <div className="service-circle" onClick={() => scrollToRechner("reinigung")}>
-              <div className="service-circle-img service-circle-reinigung">
-                <span className="service-circle-label">{t("hc_reinigung_t")}</span>
-              </div>
-              <p>{t("hc_reinigung_d")}</p>
-              <span className="service-band-cta-dark">{t("service_cta")}</span>
             </div>
           </div>
         </div>

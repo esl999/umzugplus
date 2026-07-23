@@ -82,7 +82,7 @@ function LanguageSwitch() {
   return (
     <div className="nav-lang" ref={ref}>
       <button type="button" className="nav-lang-btn" onClick={() => setOpen((v) => !v)}>
-        {current.flag} {current.code.toUpperCase()}
+        {current.flag}
       </button>
       {open && (
         <ul className="nav-dropdown-menu">
@@ -143,7 +143,7 @@ export default function Navbar() {
       <div className="nav-inner">
         <Link href="/" className="logo">
           <span className="dot" />
-          Umzug<span className="plus">Plus</span>
+          <span className="logo-text">Umzug<span className="plus">Plus</span></span>
         </Link>
 
         <ul className="nav-links">
