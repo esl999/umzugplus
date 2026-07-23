@@ -489,12 +489,7 @@ export default function Home() {
 
       if (insertError) throw insertError;
 
-      fetch("/api/email/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anfrageId: newOrder.id, type: "angebot" }),
-      }).catch(() => {});
-
+      // Der Angebot-Versand läuft jetzt zuverlässig über den Supabase-Datenbank-Webhook.
       setSendSuccess(true);
     } catch (err) {
       setSendError("Die Anfrage konnte nicht gesendet werden. Bitte versuch es erneut.");

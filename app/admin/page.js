@@ -71,14 +71,7 @@ export default function AdminPage() {
     setAnfragen((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     await supabase.from("anfragen").update(patch).eq("id", id);
     logAction(session.user.email, "anfrage.status", `${id} -> ${status}`);
-
-    if (status === "bestaetigt") {
-      fetch("/api/email/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anfrageId: id, type: "auftragsbestaetigung" }),
-      }).catch(() => {});
-    }
+    // Der Bestätigungs-Versand läuft jetzt zuverlässig über den Supabase-Datenbank-Webhook.
   }
 
   async function deleteAnfrage(id, bookingNumber) {
@@ -1085,16 +1078,7 @@ function PaymentCell({ order, actorEmail, onUpdated }) {
     await supabase.from("anfragen").update(patch).eq("id", order.id);
     await logAction(actorEmail, "zahlung.update", `${order.booking_number} -> ${betrag}€`);
     onUpdated(patch);
-
-    if (rundedBetrag > 0) {
-      const emailType = rundedBetrag >= gesamt ? "rechnung" : "anzahlungsbestaetigung";
-      fetch("/api/email/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anfrageId: order.id, type: emailType }),
-      }).catch(() => {});
-    }
-
+    // Der Zahlungs-Beleg-Versand läuft jetzt zuverlässig über den Supabase-Datenbank-Webhook.
     setBusy(false);
     setOpen(false);
   }
