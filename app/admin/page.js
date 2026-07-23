@@ -156,16 +156,25 @@ export default function AdminPage() {
           <div className="admin-stat"><div className="k">Aufträge gesamt</div><div className="v">{stats.total}</div></div>
         </div>
 
-        <div className="segmented" style={{ maxWidth: 640, marginBottom: 28 }}>
-          <button className={tab === "anfragen" ? "active" : ""} onClick={() => setTab("anfragen")}>Aufträge</button>
-          <button className={tab === "kalender" ? "active" : ""} onClick={() => setTab("kalender")}>Kalender</button>
-          <button className={tab === "preise" ? "active" : ""} onClick={() => setTab("preise")}>Katalog &amp; Preise</button>
-          <button className={tab === "kunden" ? "active" : ""} onClick={() => setTab("kunden")}>Nutzer</button>
-          <button className={tab === "beschwerden" ? "active" : ""} onClick={() => setTab("beschwerden")}>Beschwerden</button>
-          <button className={tab === "bewertungen" ? "active" : ""} onClick={() => setTab("bewertungen")}>Bewertungen</button>
-          <button className={tab === "logs" ? "active" : ""} onClick={() => setTab("logs")}>Logs</button>
-        </div>
+        <div className="admin-layout">
+          <nav className="admin-sidebar">
+            {[
+              ["anfragen", "Aufträge"],
+              ["kalender", "Kalender"],
+              ["preise", "Katalog & Preise"],
+              ["kunden", "Nutzer"],
+              ["beschwerden", "Beschwerden"],
+              ["bewertungen", "Bewertungen"],
+              ["faq", "FAQ"],
+              ["logs", "Logs"],
+            ].map(([key, label]) => (
+              <button key={key} className={"admin-sidebar-item" + (tab === key ? " active" : "")} onClick={() => setTab(key)}>
+                {label}
+              </button>
+            ))}
+          </nav>
 
+          <div className="admin-content">
         {dataLoading ? (
           <div>Lade Daten…</div>
         ) : (
@@ -329,8 +338,98 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+
+            {tab === "faq" && (
+              <AdminFaq actorEmail={session.user.email} />
+            )}
           </>
         )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminFaq({ actorEmail }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [drafts, setDrafts] = useState({});
+  const [newFrage, setNewFrage] = useState("");
+  const [newAntwort, setNewAntwort] = useState("");
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    const { data } = await supabase.from("faq").select("*").order("reihenfolge");
+    setItems(data || []);
+    const d = {};
+    (data || []).forEach((f) => (d[f.id] = { frage: f.frage, antwort: f.antwort }));
+    setDrafts(d);
+    setLoading(false);
+  }
+
+  async function save(id) {
+    const draft = drafts[id];
+    await supabase.from("faq").update({ frage: draft.frage, antwort: draft.antwort }).eq("id", id);
+    await logAction(actorEmail, "faq.update", draft.frage);
+    load();
+  }
+
+  async function remove(id) {
+    if (!confirm("Diese Frage wirklich löschen?")) return;
+    await supabase.from("faq").delete().eq("id", id);
+    await logAction(actorEmail, "faq.geloescht", id);
+    load();
+  }
+
+  async function add() {
+    if (!newFrage.trim() || !newAntwort.trim()) return;
+    await supabase.from("faq").insert({ frage: newFrage.trim(), antwort: newAntwort.trim(), reihenfolge: items.length + 1 });
+    await logAction(actorEmail, "faq.neu", newFrage.trim());
+    setNewFrage("");
+    setNewAntwort("");
+    load();
+  }
+
+  if (loading) return <div>Lade FAQ…</div>;
+
+  return (
+    <div>
+      <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>Neue Frage anlegen</div>
+      <div className="field" style={{ marginBottom: 10, maxWidth: 500 }}>
+        <input placeholder="Frage" value={newFrage} onChange={(e) => setNewFrage(e.target.value)} style={{ marginBottom: 8 }} />
+        <textarea rows={2} placeholder="Antwort" value={newAntwort} onChange={(e) => setNewAntwort(e.target.value)}
+          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--border)", fontFamily: "inherit" }} />
+      </div>
+      <button className="btn primary" onClick={add} style={{ marginBottom: 28 }}>+ Anlegen</button>
+
+      <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 12 }}>Bestehende Fragen ({items.length})</div>
+      <div style={{ display: "grid", gap: 14 }}>
+        {items.map((f) => (
+          <div key={f.id} className="calc-result" style={{ maxWidth: 600 }}>
+            <div style={{ padding: 16 }}>
+              <input
+                value={drafts[f.id]?.frage ?? f.frage}
+                onChange={(e) => setDrafts((d) => ({ ...d, [f.id]: { ...d[f.id], frage: e.target.value } }))}
+                style={{ marginBottom: 8, fontWeight: 700 }}
+              />
+              <textarea
+                rows={2}
+                value={drafts[f.id]?.antwort ?? f.antwort}
+                onChange={(e) => setDrafts((d) => ({ ...d, [f.id]: { ...d[f.id], antwort: e.target.value } }))}
+                style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--border)", fontFamily: "inherit", marginBottom: 10 }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="small-btn" onClick={() => save(f.id)}>Speichern</button>
+                <button className="small-btn danger" onClick={() => remove(f.id)}>Löschen</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -729,11 +828,25 @@ function AdminKatalog({ actorEmail }) {
   const [items, setItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [drafts, setDrafts] = useState({});
+  const [group, setGroup] = useState("moebel"); // moebel | reinigung
+  const [priceMode, setPriceMode] = useState("preis"); // preis | preis_entsorgung | preis_abbau | preis_einbau
+  const [activeKategorie, setActiveKategorie] = useState(null);
+
   const [newName, setNewName] = useState("");
   const [newKategorie, setNewKategorie] = useState("");
-  const [newPreis, setNewPreis] = useState("");
+  const [newPreisUmzug, setNewPreisUmzug] = useState("");
+  const [newPreisEntsorgung, setNewPreisEntsorgung] = useState("");
+  const [newPreisAbbau, setNewPreisAbbau] = useState("");
+  const [newPreisEinbau, setNewPreisEinbau] = useState("");
+  const [newPreisReinigung, setNewPreisReinigung] = useState("");
   const [adding, setAdding] = useState(false);
-  const [activeKategorie, setActiveKategorie] = useState(null);
+
+  const priceModeLabels = {
+    preis: "Umzug",
+    preis_entsorgung: "Entsorgung",
+    preis_abbau: "Abbau",
+    preis_einbau: "Einbau",
+  };
 
   useEffect(() => {
     load();
@@ -744,14 +857,17 @@ function AdminKatalog({ actorEmail }) {
     const { data } = await supabase.from("katalog_items").select("*").order("kategorie").order("name");
     setItems(data || []);
     const d = {};
-    (data || []).forEach((i) => (d[i.id] = i.preis));
+    (data || []).forEach((i) => {
+      d[i.id] = { preis: i.preis, preis_entsorgung: i.preis_entsorgung, preis_abbau: i.preis_abbau, preis_einbau: i.preis_einbau };
+    });
     setDrafts(d);
     setLoadingItems(false);
   }
 
-  async function saveItem(id) {
-    await supabase.from("katalog_items").update({ preis: Number(drafts[id]) }).eq("id", id);
-    await logAction(actorEmail, "katalog.preis", `${id} -> ${drafts[id]}`);
+  async function saveItem(item, field) {
+    const val = Number(drafts[item.id]?.[field] ?? item[field] ?? 0);
+    await supabase.from("katalog_items").update({ [field]: val }).eq("id", item.id);
+    await logAction(actorEmail, "katalog.preis", `${item.name} (${field}) -> ${val}`);
     load();
   }
 
@@ -762,25 +878,38 @@ function AdminKatalog({ actorEmail }) {
   }
 
   async function addItem() {
-    if (!newName.trim() || !newPreis) return;
+    if (!newName.trim()) return;
     setAdding(true);
-    await supabase.from("katalog_items").insert({
-      name: newName.trim(),
-      kategorie: newKategorie.trim() || "Sonstiges",
-      preis: Number(newPreis),
-    });
+    if (group === "moebel") {
+      await supabase.from("katalog_items").insert({
+        name: newName.trim(),
+        kategorie: newKategorie.trim() || "Sonstiges",
+        leistung_typ: "moebel",
+        preis: Number(newPreisUmzug) || 0,
+        preis_entsorgung: Number(newPreisEntsorgung) || 0,
+        preis_abbau: Number(newPreisAbbau) || 0,
+        preis_einbau: Number(newPreisEinbau) || 0,
+      });
+    } else {
+      await supabase.from("katalog_items").insert({
+        name: newName.trim(),
+        kategorie: newKategorie.trim() || "Sonstiges",
+        leistung_typ: "reinigung",
+        preis: Number(newPreisReinigung) || 0,
+      });
+    }
     await logAction(actorEmail, "katalog.neu", newName.trim());
-    setNewName("");
-    setNewKategorie("");
-    setNewPreis("");
+    setNewName(""); setNewKategorie(""); setNewPreisUmzug(""); setNewPreisEntsorgung(""); setNewPreisAbbau(""); setNewPreisEinbau(""); setNewPreisReinigung("");
     setAdding(false);
     load();
   }
 
   if (loadingItems) return <div>Lade Katalog…</div>;
 
-  const kategorien = [...new Set(items.map((i) => i.kategorie))];
-  const visible = activeKategorie ? items.filter((i) => i.kategorie === activeKategorie) : [];
+  const groupItems = items.filter((i) => i.leistung_typ === group);
+  const kategorien = [...new Set(groupItems.map((i) => i.kategorie))];
+  const visible = activeKategorie ? groupItems.filter((i) => i.kategorie === activeKategorie) : [];
+  const field = group === "reinigung" ? "preis" : priceMode;
 
   return (
     <div style={{ marginBottom: 32 }}>
@@ -788,14 +917,39 @@ function AdminKatalog({ actorEmail }) {
         Gegenstände &amp; Leistungen — Katalog ({items.length})
       </div>
 
+      <div className="segmented" style={{ maxWidth: 340, marginBottom: 14 }}>
+        <button className={group === "moebel" ? "active" : ""} onClick={() => { setGroup("moebel"); setActiveKategorie(null); }}>Möbel &amp; Gegenstände</button>
+        <button className={group === "reinigung" ? "active" : ""} onClick={() => { setGroup("reinigung"); setActiveKategorie(null); }}>Reinigungsleistungen</button>
+      </div>
+
+      {group === "moebel" && (
+        <div className="segmented" style={{ maxWidth: 480, marginBottom: 14 }}>
+          {Object.entries(priceModeLabels).map(([key, label]) => (
+            <button key={key} className={priceMode === key ? "active" : ""} onClick={() => setPriceMode(key)}>{label}</button>
+          ))}
+        </div>
+      )}
+
       <div className="admin-toolbar">
         <input className="admin-search" placeholder="Name (z.B. Kühlschrank)" value={newName} onChange={(e) => setNewName(e.target.value)} />
         <input className="admin-search" style={{ maxWidth: 160 }} placeholder="Kategorie" value={newKategorie} onChange={(e) => setNewKategorie(e.target.value)} />
-        <input className="admin-search" type="number" style={{ maxWidth: 100 }} placeholder="€" value={newPreis} onChange={(e) => setNewPreis(e.target.value)} />
-        <button className="btn primary" onClick={addItem} disabled={adding}>+ Anlegen</button>
       </div>
+      {group === "moebel" ? (
+        <div className="admin-toolbar">
+          <input className="admin-search" type="number" style={{ maxWidth: 130 }} placeholder="€ Umzug" value={newPreisUmzug} onChange={(e) => setNewPreisUmzug(e.target.value)} />
+          <input className="admin-search" type="number" style={{ maxWidth: 130 }} placeholder="€ Entsorgung" value={newPreisEntsorgung} onChange={(e) => setNewPreisEntsorgung(e.target.value)} />
+          <input className="admin-search" type="number" style={{ maxWidth: 130 }} placeholder="€ Abbau" value={newPreisAbbau} onChange={(e) => setNewPreisAbbau(e.target.value)} />
+          <input className="admin-search" type="number" style={{ maxWidth: 130 }} placeholder="€ Einbau" value={newPreisEinbau} onChange={(e) => setNewPreisEinbau(e.target.value)} />
+          <button className="btn primary" onClick={addItem} disabled={adding}>+ Anlegen</button>
+        </div>
+      ) : (
+        <div className="admin-toolbar">
+          <input className="admin-search" type="number" style={{ maxWidth: 130 }} placeholder="€" value={newPreisReinigung} onChange={(e) => setNewPreisReinigung(e.target.value)} />
+          <button className="btn primary" onClick={addItem} disabled={adding}>+ Anlegen</button>
+        </div>
+      )}
 
-      <div className="kategorie-tabs" style={{ marginBottom: 14 }}>
+      <div className="kategorie-tabs" style={{ marginBottom: 14, marginTop: 14 }}>
         {kategorien.map((k) => (
           <button
             key={k}
@@ -803,28 +957,28 @@ function AdminKatalog({ actorEmail }) {
             className={"kategorie-tab" + (activeKategorie === k ? " active" : "")}
             onClick={() => setActiveKategorie(k)}
           >
-            {k} ({items.filter((i) => i.kategorie === k).length})
+            {k} ({groupItems.filter((i) => i.kategorie === k).length})
           </button>
         ))}
       </div>
 
       {!activeKategorie ? (
-        <p className="mini-note">Wähle oben eine Kategorie, um die Artikel zu bearbeiten.</p>
+        <p className="mini-note">Wähle oben eine Kategorie, um die Preise zu bearbeiten.</p>
       ) : (
         <div className="items-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {visible.map((item) => (
             <div className="price-row" key={item.id} style={{ opacity: item.aktiv ? 1 : 0.5 }}>
               <div>
                 <div className="price-row-label">{item.name}</div>
-                <div className="admin-sub">{item.kategorie}</div>
+                <div className="admin-sub">{item.kategorie} · {group === "moebel" ? priceModeLabels[priceMode] : "Reinigung"}</div>
               </div>
               <div className="price-row-controls">
                 <input
                   type="number"
-                  value={drafts[item.id] ?? item.preis}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
+                  value={drafts[item.id]?.[field] ?? item[field] ?? 0}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: { ...d[item.id], [field]: e.target.value } }))}
                 />
-                <button className="btn primary" onClick={() => saveItem(item.id)}>Speichern</button>
+                <button className="btn primary" onClick={() => saveItem(item, field)}>Speichern</button>
                 <button className="small-btn" onClick={() => toggleActive(item)}>
                   {item.aktiv ? "Deaktivieren" : "Aktivieren"}
                 </button>

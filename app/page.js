@@ -198,7 +198,6 @@ export default function Home() {
   const katalogForLeistung = katalog.filter((i) =>
     leistung === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ === "moebel"
   );
-  const montageKatalog = katalog.filter((i) => i.leistung_typ === "montage");
   const kategorien = [...new Set(katalogForLeistung.map((i) => i.kategorie))];
   const itemsInKategorie = katalogForLeistung.filter((i) => i.kategorie === selectedKategorie);
   const gegenstaendeGesamtAnzahl = Object.values(gegenstaende).reduce((s, n) => s + (n || 0), 0);
@@ -224,11 +223,12 @@ export default function Home() {
 
     let umfang = 0;
     let umfangLabel = "";
+    const gegenstandPreisFeld = leistung === "entsorgung" ? "preis_entsorgung" : "preis";
     if (berechnungsart === "flaeche") {
       umfang = (Number(flaeche) || 0) * proQm;
       umfangLabel = `Fläche: ${flaeche || 0} m² × ${proQm.toFixed(2)} €/m²`;
     } else {
-      umfang = katalogForLeistung.reduce((sum, item) => sum + (gegenstaende[item.id] || 0) * item.preis, 0);
+      umfang = katalogForLeistung.reduce((sum, item) => sum + (gegenstaende[item.id] || 0) * (item[gegenstandPreisFeld] || 0), 0);
       umfangLabel = "Ausgewählte Positionen (einzeln berechnet)";
     }
 
@@ -245,12 +245,12 @@ export default function Home() {
     let zusatzSumme = 0;
     const zusatzLabels = [];
     const montageAbbauSumme = Object.entries(moebelAbbauItems).reduce((s, [id, qty]) => {
-      const item = montageKatalog.find((m) => m.id === id);
-      return s + (item ? item.preis * qty : 0);
+      const item = katalogForLeistung.find((m) => m.id === id);
+      return s + (item ? (item.preis_abbau || 0) * qty : 0);
     }, 0);
     const montageEinbauSumme = Object.entries(moebelEinbauItems).reduce((s, [id, qty]) => {
-      const item = montageKatalog.find((m) => m.id === id);
-      return s + (item ? item.preis * qty : 0);
+      const item = katalogForLeistung.find((m) => m.id === id);
+      return s + (item ? (item.preis_einbau || 0) * qty : 0);
     }, 0);
     if (montageAbbauSumme > 0) { zusatzSumme += montageAbbauSumme; zusatzLabels.push(`Möbel-Abbau (${montageAbbauSumme.toFixed(2)} €)`); }
     if (montageEinbauSumme > 0) { zusatzSumme += montageEinbauSumme; zusatzLabels.push(`Möbel-Einbau (${montageEinbauSumme.toFixed(2)} €)`); }
@@ -558,18 +558,18 @@ export default function Home() {
                     </div>
                     <div className="calc-row-3">
                       <div className="field">
-                        <label htmlFor="etageVon">Etage (Auszug)</label>
+                        <label htmlFor="etageVon">{t("label_etage_auszug")}</label>
                         <select id="etageVon" value={etageVon} onChange={(e) => setEtageVon(e.target.value)}>
                           {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
-                        <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> Aufzug vorhanden</label>
+                        <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> {t("label_aufzug")}</label>
                       </div>
                       <div className="field">
-                        <label htmlFor="etageNach">Etage (Einzug)</label>
+                        <label htmlFor="etageNach">{t("label_etage_einzug")}</label>
                         <select id="etageNach" value={etageNach} onChange={(e) => setEtageNach(e.target.value)}>
                           {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
-                        <label className="checkbox-row"><input type="checkbox" checked={nachAufzug} onChange={(e) => setNachAufzug(e.target.checked)} /> Aufzug vorhanden</label>
+                        <label className="checkbox-row"><input type="checkbox" checked={nachAufzug} onChange={(e) => setNachAufzug(e.target.checked)} /> {t("label_aufzug")}</label>
                       </div>
                       <div className="field">
                         <label>&nbsp;</label>
@@ -584,11 +584,11 @@ export default function Home() {
                     </p>
                     <AddressField id="objekt" label={`Objekt-Adresse (NRW)`} placeholder="Adresse in Deutschland suchen…" value={objektAdresse} onChange={setObjektAdresse} />
                     <div className="field">
-                      <label htmlFor="etageVon">Etage (ohne Aufzug)</label>
+                      <label htmlFor="etageVon">{t("label_etage_ohne_aufzug")}</label>
                       <select id="etageVon" value={etageVon} onChange={(e) => setEtageVon(e.target.value)}>
                         {etagenOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
-                      <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> Aufzug vorhanden</label>
+                      <label className="checkbox-row"><input type="checkbox" checked={vonAufzug} onChange={(e) => setVonAufzug(e.target.checked)} /> {t("label_aufzug")}</label>
                     </div>
                   </div>
                 )}
@@ -609,7 +609,7 @@ export default function Home() {
 
                 {berechnungsart === "flaeche" ? (
                   <div className="field" style={{ marginTop: 16, maxWidth: 260 }}>
-                    <label htmlFor="flaeche">Fläche (m²)</label>
+                    <label htmlFor="flaeche">{t("label_flaeche")}</label>
                     <input id="flaeche" type="number" min="0" placeholder="z.B. 60" value={flaeche} onChange={(e) => setFlaeche(e.target.value)} />
                   </div>
                 ) : (
@@ -651,14 +651,14 @@ export default function Home() {
 
                 {leistung !== "reinigung" && (
                   <div className="field" style={{ marginTop: 20 }}>
-                    <label>Zusatzleistungen</label>
+                    <label>{t("label_zusatzleistungen")}</label>
                     <div className="items-grid">
                       {[
-                        ["moebelAbbau", "Möbel-Abbau / Demontage"],
-                        ["moebelEinbau", "Möbel-Einbau / Montage"],
-                        ["verpackungsservice", "Verpackungsservice inkl. Material"],
-                        ["halteverbotszone", "Halteverbotszone"],
-                        ["transportversicherung", "Transportversicherung (erweitert)"],
+                        ["moebelAbbau", t("zl_abbau")],
+                        ["moebelEinbau", t("zl_einbau")],
+                        ["verpackungsservice", t("zl_verpackung")],
+                        ["halteverbotszone", t("zl_halteverbot")],
+                        ["transportversicherung", t("zl_versicherung")],
                       ].map(([key, label]) => (
                         <label className="item-row" key={key} style={{ cursor: "pointer" }}>
                           <span>{label}</span>
@@ -669,11 +669,11 @@ export default function Home() {
 
                     {zusatz.moebelAbbau && (
                       <div style={{ marginTop: 12 }}>
-                        <p className="mini-note" style={{ marginBottom: 8 }}>Was muss abgebaut werden?</p>
+                        <p className="mini-note" style={{ marginBottom: 8 }}>{t("frage_abbau")}</p>
                         <div className="items-grid">
-                          {montageKatalog.map((item) => (
+                          {katalogForLeistung.map((item) => (
                             <div className="item-row" key={item.id}>
-                              <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
+                              <span>{item.name}</span>
                               <div className="qty-control">
                                 <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelAbbauItems, item.id, -1)}>−</button>
                                 <span className="qty-value">{moebelAbbauItems[item.id] || 0}</span>
@@ -687,11 +687,11 @@ export default function Home() {
 
                     {zusatz.moebelEinbau && (
                       <div style={{ marginTop: 12 }}>
-                        <p className="mini-note" style={{ marginBottom: 8 }}>Was muss aufgebaut werden?</p>
+                        <p className="mini-note" style={{ marginBottom: 8 }}>{t("frage_einbau")}</p>
                         <div className="items-grid">
-                          {montageKatalog.map((item) => (
+                          {katalogForLeistung.map((item) => (
                             <div className="item-row" key={item.id}>
-                              <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
+                              <span>{item.name}</span>
                               <div className="qty-control">
                                 <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelEinbauItems, item.id, -1)}>−</button>
                                 <span className="qty-value">{moebelEinbauItems[item.id] || 0}</span>
@@ -706,24 +706,24 @@ export default function Home() {
                 )}
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label>Wie viele Mitarbeiter sollen kommen?</label>
+                  <label>{t("label_mitarbeiter")}</label>
                   <div className="segmented" style={{ maxWidth: 340 }}>
-                    <button type="button" className={mitarbeiter === 2 ? "active" : ""} onClick={() => setMitarbeiter(2)}>2 Mitarbeiter</button>
-                    <button type="button" className={mitarbeiter === 3 ? "active" : ""} onClick={() => setMitarbeiter(3)}>3 Mitarbeiter (schneller)</button>
+                    <button type="button" className={mitarbeiter === 2 ? "active" : ""} onClick={() => setMitarbeiter(2)}>{t("mitarbeiter_2")}</button>
+                    <button type="button" className={mitarbeiter === 3 ? "active" : ""} onClick={() => setMitarbeiter(3)}>{t("mitarbeiter_3")}</button>
                   </div>
                 </div>
 
                 {leistung === "umzug" && (
                   <div className="field" style={{ marginTop: 16 }}>
                     <label className="item-row" style={{ cursor: "pointer", maxWidth: 420 }}>
-                      <span>2. Transporter (schneller — benötigt einen Tag mit 2 freien Plätzen)</span>
+                      <span>{t("label_zweitransporter")}</span>
                       <input type="checkbox" checked={zweitransporter} onChange={(e) => { setZweitransporter(e.target.checked); setWunschtermin(""); }} />
                     </label>
                   </div>
                 )}
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label htmlFor="sonstiges">Sonstiges (optional)</label>
+                  <label htmlFor="sonstiges">{t("label_sonstiges")}</label>
                   <textarea
                     id="sonstiges"
                     rows={2}
@@ -735,13 +735,13 @@ export default function Home() {
                 </div>
 
                 <div className="field" style={{ marginTop: 20 }}>
-                  <label>Wunschtermin{zweitransporter ? " (nur Tage mit 2 freien Plätzen wählbar)" : ""}</label>
+                  <label>{t("label_wunschtermin")}{zweitransporter ? " (nur Tage mit 2 freien Plätzen wählbar)" : ""}</label>
                   <TerminPicker value={wunschtermin} onChange={setWunschtermin} requiredCapacity={zweitransporter ? 2 : 1} />
                 </div>
 
                 {wunschtermin && (
                   <div className="field" style={{ marginTop: 14, maxWidth: 200 }}>
-                    <label htmlFor="uhrzeit">Uhrzeit</label>
+                    <label htmlFor="uhrzeit">{t("label_uhrzeit")}</label>
                     <select id="uhrzeit" value={wunschterminUhrzeit} onChange={(e) => setWunschterminUhrzeit(e.target.value)}>
                       {["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00"].map((h) => (
                         <option key={h} value={h}>{h} Uhr</option>
@@ -752,7 +752,7 @@ export default function Home() {
 
                 <div className="calc-row-3" style={{ marginTop: 16 }}>
                   <div className="field">
-                    <label htmlFor="rabattcode">Rabattcode (optional)</label>
+                    <label htmlFor="rabattcode">{t("label_rabattcode")}</label>
                     <input id="rabattcode" type="text" placeholder="optional" value={rabattcodeInput} onChange={(e) => setRabattcodeInput(e.target.value)} />
                   </div>
                 </div>
@@ -798,21 +798,20 @@ export default function Home() {
                   </div>
 
                   <div className="price-highlight" style={{ margin: "0 20px 20px" }}>
-                    <div className="k">Voraussichtliche Dauer</div>
-                    <div className="v" style={{ fontSize: 22 }}>{breakdown.geschaetzteDauerStunden} Std.</div>
+                    <div className="k">{t("label_dauer")}</div>
+                    <div className="v" style={{ fontSize: 22 }}>{breakdown.geschaetzteDauerStunden} {t("einheit_std")}</div>
                     {breakdown.geschaetzteDauerStunden > 8 ? (
                       <div className="note-inline" style={{ color: "var(--red-dark)" }}>
-                        Das ist voraussichtlich mehr als ein Arbeitstag. Bitte wähle zusätzlich einen zweiten,
-                        aufeinanderfolgenden freien Tag.
+                        {t("dauer_warnung")}
                       </div>
                     ) : (
-                      <div className="note-inline">Unverbindliche Schätzung, abhängig von Mitarbeitern, Transportern und Etagen.</div>
+                      <div className="note-inline">{t("dauer_hinweis")}</div>
                     )}
                   </div>
 
                   {breakdown.geschaetzteDauerStunden > 8 && (
                     <div className="field" style={{ margin: "0 20px 20px" }}>
-                      <label>2. Tag (direkt im Anschluss)</label>
+                      <label>{t("label_tag2")}</label>
                       <TerminPicker value={wunschterminTag2} onChange={setWunschterminTag2} requiredCapacity={zweitransporter ? 2 : 1} />
                     </div>
                   )}
@@ -823,16 +822,16 @@ export default function Home() {
 
                   {leistung !== "entsorgung" && !sendSuccess && (
                     <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: 16, margin: "0 20px 20px" }}>
-                      <p style={{ fontSize: 13.5, marginBottom: 10 }}>Möchtest du bei dieser Gelegenheit auch etwas entsorgen lassen?</p>
+                      <p style={{ fontSize: 13.5, marginBottom: 10 }}>{t("cross_frage")}</p>
                       <button type="button" className="btn ghost" onClick={() => startCrossSell("entsorgung")}>
-                        Ja, Entsorgung dazu anfragen
+                        {t("cross_btn")}
                       </button>
                       {crossSellTarget === "entsorgung" && leistung === "umzug" && (
                         <div style={{ marginTop: 12 }}>
-                          <p style={{ fontSize: 13, marginBottom: 8 }}>Welche Adresse soll übernommen werden?</p>
+                          <p style={{ fontSize: 13, marginBottom: 8 }}>{t("cross_adresse_frage")}</p>
                           <div className="btn-row">
-                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>Startadresse</button>
-                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>Zieladresse</button>
+                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>{t("btn_start")}</button>
+                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>{t("btn_ziel")}</button>
                           </div>
                         </div>
                       )}
@@ -857,8 +856,8 @@ export default function Home() {
                             <div style={{ marginTop: 14 }}>
                               <p style={{ fontSize: 13, marginBottom: 8 }}>Welche Adresse soll für {leistungLabels[crossSellTarget]} übernommen werden?</p>
                               <div className="btn-row">
-                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>Startadresse übernehmen</button>
-                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>Zieladresse übernehmen</button>
+                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>{t("btn_start")}</button>
+                                <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>{t("btn_ziel")}</button>
                               </div>
                             </div>
                           )}
@@ -877,15 +876,15 @@ export default function Home() {
                       <>
                         <div className="calc-row-3">
                           <div className="field">
-                            <label htmlFor="name">Name *</label>
+                            <label htmlFor="name">{t("label_name")} *</label>
                             <input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} />
                           </div>
                           <div className="field">
-                            <label htmlFor="contactEmail">E-Mail</label>
+                            <label htmlFor="contactEmail">{t("label_email")}</label>
                             <input id="contactEmail" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
                           </div>
                           <div className="field">
-                            <label htmlFor="telefon">Telefon *</label>
+                            <label htmlFor="telefon">{t("label_telefon")} *</label>
                             <input id="telefon" type="text" required value={telefon} onChange={(e) => setTelefon(e.target.value)} />
                           </div>
                         </div>
@@ -903,8 +902,42 @@ export default function Home() {
         </div>
       </section>
 
+      <FaqSection />
       <Footer />
     </>
+  );
+}
+
+function FaqSection() {
+  const { t } = useLanguage();
+  const [faqs, setFaqs] = useState([]);
+  const [openId, setOpenId] = useState(null);
+
+  useEffect(() => {
+    supabase.from("faq").select("*").order("reihenfolge").then(({ data }) => setFaqs(data || []));
+  }, []);
+
+  if (faqs.length === 0) return null;
+
+  return (
+    <section className="faq-section">
+      <div className="wrap">
+        <div className="section-title">
+          <h2>{t("faq_title")}</h2>
+        </div>
+        <div className="faq-list">
+          {faqs.map((f) => (
+            <div key={f.id} className="faq-item">
+              <button type="button" className="faq-question" onClick={() => setOpenId(openId === f.id ? null : f.id)}>
+                <span>{f.frage}</span>
+                <span>{openId === f.id ? "−" : "+"}</span>
+              </button>
+              {openId === f.id && <div className="faq-answer">{f.antwort}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
