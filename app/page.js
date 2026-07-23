@@ -124,11 +124,15 @@ export default function Home() {
   const [gegenstaende, setGegenstaende] = useState({});
   const [selectedKategorie, setSelectedKategorie] = useState(null);
   const [zusatz, setZusatz] = useState({ moebelAbbau: false, moebelEinbau: false, verpackungsservice: false, halteverbotszone: false });
+  const [moebelAbbauItems, setMoebelAbbauItems] = useState({});
+  const [moebelEinbauItems, setMoebelEinbauItems] = useState({});
   const [mitarbeiter, setMitarbeiter] = useState(2);
   const [zweitransporter, setZweitransporter] = useState(false);
   const [sonstiges, setSonstiges] = useState("");
   const [rabattcodeInput, setRabattcodeInput] = useState("");
   const [wunschtermin, setWunschtermin] = useState("");
+  const [wunschterminUhrzeit, setWunschterminUhrzeit] = useState("09:00");
+  const [wunschterminTag2, setWunschterminTag2] = useState("");
 
   const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
@@ -192,11 +196,19 @@ export default function Home() {
   }
 
   const katalogForLeistung = katalog.filter((i) =>
-    leistung === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ !== "reinigung"
+    leistung === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ === "moebel"
   );
+  const montageKatalog = katalog.filter((i) => i.leistung_typ === "montage");
   const kategorien = [...new Set(katalogForLeistung.map((i) => i.kategorie))];
   const itemsInKategorie = katalogForLeistung.filter((i) => i.kategorie === selectedKategorie);
   const gegenstaendeGesamtAnzahl = Object.values(gegenstaende).reduce((s, n) => s + (n || 0), 0);
+
+  function changeMontageQty(setter, id, delta) {
+    setter((prev) => {
+      const next = Math.max(0, (prev[id] || 0) + delta);
+      return { ...prev, [id]: next };
+    });
+  }
 
   function computeBreakdown() {
     if (!prices || !result) return null;
@@ -232,8 +244,16 @@ export default function Home() {
 
     let zusatzSumme = 0;
     const zusatzLabels = [];
-    if (zusatz.moebelAbbau) { zusatzSumme += prices.moebelAbbau.price; zusatzLabels.push(`Möbel-Abbau (${prices.moebelAbbau.price.toFixed(2)} €)`); }
-    if (zusatz.moebelEinbau) { zusatzSumme += prices.moebelEinbau.price; zusatzLabels.push(`Möbel-Einbau (${prices.moebelEinbau.price.toFixed(2)} €)`); }
+    const montageAbbauSumme = Object.entries(moebelAbbauItems).reduce((s, [id, qty]) => {
+      const item = montageKatalog.find((m) => m.id === id);
+      return s + (item ? item.preis * qty : 0);
+    }, 0);
+    const montageEinbauSumme = Object.entries(moebelEinbauItems).reduce((s, [id, qty]) => {
+      const item = montageKatalog.find((m) => m.id === id);
+      return s + (item ? item.preis * qty : 0);
+    }, 0);
+    if (montageAbbauSumme > 0) { zusatzSumme += montageAbbauSumme; zusatzLabels.push(`Möbel-Abbau (${montageAbbauSumme.toFixed(2)} €)`); }
+    if (montageEinbauSumme > 0) { zusatzSumme += montageEinbauSumme; zusatzLabels.push(`Möbel-Einbau (${montageEinbauSumme.toFixed(2)} €)`); }
     if (zusatz.verpackungsservice) { zusatzSumme += prices.verpackungsservice.price; zusatzLabels.push(`Verpackungsservice (${prices.verpackungsservice.price.toFixed(2)} €)`); }
     if (zusatz.halteverbotszone) { zusatzSumme += prices.halteverbotszone.price; zusatzLabels.push(`Halteverbotszone (${prices.halteverbotszone.price.toFixed(2)} €)`); }
     if (zusatz.transportversicherung) {
@@ -246,6 +266,15 @@ export default function Home() {
     const zweitransporterAufpreis = zweitransporter ? prices.zweitransporterAufpreis.price : 0;
 
     let netto = grundpreis + umfang + etagenzuschlag + transport + zusatzSumme + mitarbeiterAufpreis + zweitransporterAufpreis;
+
+    let samstagAufpreisBetrag = 0;
+    if (wunschtermin) {
+      const terminDatum = new Date(wunschtermin + "T12:00:00");
+      if (terminDatum.getDay() === 6) {
+        samstagAufpreisBetrag = netto * (prices.samstagAufpreis.price / 100);
+        netto += samstagAufpreisBetrag;
+      }
+    }
 
     if (kundentyp === "gewerbe") {
       netto = netto * (1 - prices.rabattGewerbe.price / 100);
@@ -262,12 +291,30 @@ export default function Home() {
     const gesamt = Math.max(brutto, prices.mindestauftragswert.price);
     const anzahlung = gesamt * (prices.anzahlung.price / 100);
 
+    // Dauer-Schätzung
+    const basisstunden =
+      leistung === "umzug" ? prices.basisstundenUmzug.price :
+      leistung === "entsorgung" ? prices.basisstundenEntsorgung.price :
+      prices.basisstundenReinigung.price;
+    const umfangStunden = berechnungsart === "flaeche"
+      ? (Number(flaeche) || 0) * prices.stundenProQm.price
+      : gegenstaendeGesamtAnzahl * 0.15;
+    const etagenStunden = etagenOhneAufzug * prices.stundenProEtageOhneAufzug.price;
+    const verpackungStunden = zusatz.verpackungsservice ? prices.stundenVerpackung.price : 0;
+    const montageAnzahl = Object.values(moebelAbbauItems).reduce((s, n) => s + n, 0) + Object.values(moebelEinbauItems).reduce((s, n) => s + n, 0);
+    const montageStunden = montageAnzahl * 0.25;
+
+    let geschaetzteDauerStunden = basisstunden + umfangStunden + etagenStunden + verpackungStunden + montageStunden;
+    if (mitarbeiter === 3) geschaetzteDauerStunden *= 1 - prices.dreiMitarbeiterZeitfaktor.price / 100;
+    if (zweitransporter) geschaetzteDauerStunden *= 1 - prices.zweiTransporterZeitfaktor.price / 100;
+    geschaetzteDauerStunden = Math.round(Math.max(1, geschaetzteDauerStunden) * 10) / 10;
+
     return {
       grundpreis, umfang, umfangLabel, etagenOhneAufzug, etagenzuschlag,
       km, fernumzug, transport, zusatzSumme, zusatzLabels, rabattBetrag,
-      mitarbeiterAufpreis, zweitransporterAufpreis,
+      mitarbeiterAufpreis, zweitransporterAufpreis, montageAbbauSumme, montageEinbauSumme, samstagAufpreisBetrag,
       netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt,
-      anzahlung, bezahlt: 0, offen: gesamt,
+      anzahlung, bezahlt: 0, offen: gesamt, geschaetzteDauerStunden,
     };
   }
 
@@ -347,6 +394,12 @@ export default function Home() {
     try {
       const breakdown = computeBreakdown();
 
+      if (breakdown.geschaetzteDauerStunden > 8 && !wunschterminTag2) {
+        setSendError("Dieser Auftrag dauert voraussichtlich mehr als 8 Stunden. Bitte wähle zusätzlich einen zweiten Tag.");
+        setSending(false);
+        return;
+      }
+
       const { data: newOrder, error: insertError } = await supabase
         .from("anfragen")
         .insert({
@@ -364,10 +417,13 @@ export default function Home() {
           berechnungsart,
           flaeche: berechnungsart === "flaeche" ? Number(flaeche) || null : null,
           gegenstaende: berechnungsart === "gegenstaende" ? gegenstaende : null,
-          zusatzleistungen: zusatz,
+          zusatzleistungen: { ...zusatz, moebelAbbauItems, moebelEinbauItems },
           mitarbeiter,
           kapazitaet_bedarf: zweitransporter ? 2 : 1,
           wunschtermin: wunschtermin || null,
+          wunschtermin_uhrzeit: wunschtermin ? wunschterminUhrzeit : null,
+          wunschtermin_tag2: wunschterminTag2 || null,
+          geschaetzte_dauer_stunden: breakdown.geschaetzteDauerStunden,
           rabattcode: result.rabatt ? result.rabatt.code : null,
           geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
           preis_details: breakdown,
@@ -610,6 +666,42 @@ export default function Home() {
                         </label>
                       ))}
                     </div>
+
+                    {zusatz.moebelAbbau && (
+                      <div style={{ marginTop: 12 }}>
+                        <p className="mini-note" style={{ marginBottom: 8 }}>Was muss abgebaut werden?</p>
+                        <div className="items-grid">
+                          {montageKatalog.map((item) => (
+                            <div className="item-row" key={item.id}>
+                              <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
+                              <div className="qty-control">
+                                <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelAbbauItems, item.id, -1)}>−</button>
+                                <span className="qty-value">{moebelAbbauItems[item.id] || 0}</span>
+                                <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelAbbauItems, item.id, 1)}>+</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {zusatz.moebelEinbau && (
+                      <div style={{ marginTop: 12 }}>
+                        <p className="mini-note" style={{ marginBottom: 8 }}>Was muss aufgebaut werden?</p>
+                        <div className="items-grid">
+                          {montageKatalog.map((item) => (
+                            <div className="item-row" key={item.id}>
+                              <span>{item.name} <span className="admin-sub">({item.preis.toFixed(2)} €)</span></span>
+                              <div className="qty-control">
+                                <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelEinbauItems, item.id, -1)}>−</button>
+                                <span className="qty-value">{moebelEinbauItems[item.id] || 0}</span>
+                                <button type="button" className="qty-btn" onClick={() => changeMontageQty(setMoebelEinbauItems, item.id, 1)}>+</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -646,6 +738,17 @@ export default function Home() {
                   <label>Wunschtermin{zweitransporter ? " (nur Tage mit 2 freien Plätzen wählbar)" : ""}</label>
                   <TerminPicker value={wunschtermin} onChange={setWunschtermin} requiredCapacity={zweitransporter ? 2 : 1} />
                 </div>
+
+                {wunschtermin && (
+                  <div className="field" style={{ marginTop: 14, maxWidth: 200 }}>
+                    <label htmlFor="uhrzeit">Uhrzeit</label>
+                    <select id="uhrzeit" value={wunschterminUhrzeit} onChange={(e) => setWunschterminUhrzeit(e.target.value)}>
+                      {["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00"].map((h) => (
+                        <option key={h} value={h}>{h} Uhr</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="calc-row-3" style={{ marginTop: 16 }}>
                   <div className="field">
@@ -685,14 +788,56 @@ export default function Home() {
                     {breakdown.rabattBetrag > 0 && (
                       <div className="belegzeile"><span>Rabattcode</span><span>− {breakdown.rabattBetrag.toFixed(2)} €</span></div>
                     )}
+                    {breakdown.samstagAufpreisBetrag > 0 && (
+                      <div className="belegzeile"><span>Samstagszuschlag ({prices.samstagAufpreis.price}%)</span><span>{breakdown.samstagAufpreisBetrag.toFixed(2)} €</span></div>
+                    )}
                     <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}><span>{t("netto_label")}</span><span>{breakdown.netto.toFixed(2)} €</span></div>
                     <div className="belegzeile"><span>zzgl. USt ({breakdown.mwstSatz}%)</span><span>{breakdown.mwstBetrag.toFixed(2)} €</span></div>
                     <div className="belegzeile" style={{ fontWeight: 700, fontSize: 16 }}><span>{t("gesamt_label")}</span><span>{breakdown.brutto.toFixed(2)} €</span></div>
                     <div className="belegzeile"><span>{t("anzahlung_label")} ({prices.anzahlung.price}%)</span><span>{breakdown.anzahlung.toFixed(2)} €</span></div>
                   </div>
+
+                  <div className="price-highlight" style={{ margin: "0 20px 20px" }}>
+                    <div className="k">Voraussichtliche Dauer</div>
+                    <div className="v" style={{ fontSize: 22 }}>{breakdown.geschaetzteDauerStunden} Std.</div>
+                    {breakdown.geschaetzteDauerStunden > 8 ? (
+                      <div className="note-inline" style={{ color: "var(--red-dark)" }}>
+                        Das ist voraussichtlich mehr als ein Arbeitstag. Bitte wähle zusätzlich einen zweiten,
+                        aufeinanderfolgenden freien Tag.
+                      </div>
+                    ) : (
+                      <div className="note-inline">Unverbindliche Schätzung, abhängig von Mitarbeitern, Transportern und Etagen.</div>
+                    )}
+                  </div>
+
+                  {breakdown.geschaetzteDauerStunden > 8 && (
+                    <div className="field" style={{ margin: "0 20px 20px" }}>
+                      <label>2. Tag (direkt im Anschluss)</label>
+                      <TerminPicker value={wunschterminTag2} onChange={setWunschterminTag2} requiredCapacity={zweitransporter ? 2 : 1} />
+                    </div>
+                  )}
+
                   <div className="calc-note">
                     Unverbindliche Schätzung. Zahlungsabwicklung folgt in Kürze.
                   </div>
+
+                  {leistung !== "entsorgung" && !sendSuccess && (
+                    <div style={{ background: "var(--bg-soft)", borderRadius: 12, padding: 16, margin: "0 20px 20px" }}>
+                      <p style={{ fontSize: 13.5, marginBottom: 10 }}>Möchtest du bei dieser Gelegenheit auch etwas entsorgen lassen?</p>
+                      <button type="button" className="btn ghost" onClick={() => startCrossSell("entsorgung")}>
+                        Ja, Entsorgung dazu anfragen
+                      </button>
+                      {crossSellTarget === "entsorgung" && leistung === "umzug" && (
+                        <div style={{ marginTop: 12 }}>
+                          <p style={{ fontSize: 13, marginBottom: 8 }}>Welche Adresse soll übernommen werden?</p>
+                          <div className="btn-row">
+                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("start")}>Startadresse</button>
+                            <button type="button" className="btn ghost" onClick={() => chooseCrossSellAddress("ziel")}>Zieladresse</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="contact-box">
                     <div className="contact-title">{t("contact_title")}</div>

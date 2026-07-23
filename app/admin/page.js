@@ -198,6 +198,7 @@ export default function AdminPage() {
                         <th>Von → Nach</th>
                         <th>km</th>
                         <th>Preis</th>
+                        <th>Dauer</th>
                         <th>Kontakt</th>
                         <th>Status</th>
                         <th>Zahlung</th>
@@ -205,7 +206,7 @@ export default function AdminPage() {
                     </thead>
                     <tbody>
                       {filteredAnfragen.length === 0 && (
-                        <tr><td colSpan={9}>Keine Treffer.</td></tr>
+                        <tr><td colSpan={10}>Keine Treffer.</td></tr>
                       )}
                       {filteredAnfragen.map((a) => (
                         <tr key={a.id}>
@@ -215,6 +216,13 @@ export default function AdminPage() {
                           <td>{a.von} → {a.nach}</td>
                           <td>{a.entfernung_km}</td>
                           <td>{a.geschaetzter_preis ? `${a.geschaetzter_preis.toFixed(2)} €` : "–"}</td>
+                          <td>
+                            <DurationCell
+                              order={a}
+                              actorEmail={session.user.email}
+                              onUpdated={(patch) => setAnfragen((prev) => prev.map((r) => (r.id === a.id ? { ...r, ...patch } : r)))}
+                            />
+                          </td>
                           <td>
                             {a.name || "–"}
                             {a.email && <div className="admin-sub">{a.email}</div>}
@@ -1039,6 +1047,44 @@ function AdminBewertungen({ bewertungen, actorEmail, onChanged }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function DurationCell({ order, actorEmail, onUpdated }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(order.geschaetzte_dauer_stunden ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    const val = draft === "" ? null : Number(draft);
+    await supabase.from("anfragen").update({ geschaetzte_dauer_stunden: val }).eq("id", order.id);
+    await logAction(actorEmail, "dauer.angepasst", `${order.booking_number} -> ${val}h`);
+    onUpdated({ geschaetzte_dauer_stunden: val });
+    setSaving(false);
+    setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <button className="small-btn" onClick={() => setEditing(true)}>
+        {order.geschaetzte_dauer_stunden ? `${order.geschaetzte_dauer_stunden} Std.` : "– Std."}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <input
+        type="number"
+        step="0.5"
+        min="0"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        style={{ width: 60, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)" }}
+      />
+      <button className="small-btn" disabled={saving} onClick={save}>✓</button>
     </div>
   );
 }

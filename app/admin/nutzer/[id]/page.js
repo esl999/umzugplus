@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 import { useAuth } from "../../../lib/useAuth";
+import StatusStepper from "../../../components/StatusStepper";
 
 const statusLabel = {
   neu: "Angebot", bestaetigt: "Bestätigt", storniert: "Storniert", abgeschlossen: "Abgeschlossen",
@@ -81,7 +82,9 @@ export default function AdminNutzerDetail() {
                     <tr key={o.id}>
                       <td>{o.booking_number}</td>
                       <td>{new Date(o.created_at).toLocaleDateString("de-DE")}</td>
-                      <td>{statusLabel[o.status] || o.status}</td>
+                      <td>
+                        <StatusStepper status={o.status} bezahlt={o.bezahlt_betrag || 0} gesamt={o.geschaetzter_preis || 0} />
+                      </td>
                       <td>{o.geschaetzter_preis ? `${o.geschaetzter_preis.toFixed(2)} €` : "–"}</td>
                     </tr>
                   ))}

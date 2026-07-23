@@ -23,6 +23,7 @@ const searchIndex = [
 ];
 
 function SearchBox() {
+  const { t } = useLanguage();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -47,7 +48,7 @@ function SearchBox() {
       <form onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder="Suchen…"
+          placeholder={t("search_placeholder")}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -102,6 +103,7 @@ function LanguageSwitch() {
 function AccountMenu({ session, isAdmin, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const { t } = useLanguage();
   const initial = (session.user.email || "?").charAt(0).toUpperCase();
 
   useEffect(() => {
@@ -119,10 +121,10 @@ function AccountMenu({ session, isAdmin, onLogout }) {
       </button>
       {open && (
         <ul className="nav-dropdown-menu">
-          <li><Link href="/konto" onClick={() => setOpen(false)}>Mein Profil</Link></li>
-          <li><Link href="/konto/auftraege" onClick={() => setOpen(false)}>Meine Aufträge</Link></li>
-          {isAdmin && <li><Link href="/admin" onClick={() => setOpen(false)}>Admin</Link></li>}
-          <li><button type="button" onClick={onLogout}>Abmelden</button></li>
+          <li><Link href="/konto" onClick={() => setOpen(false)}>{t("nav_profil")}</Link></li>
+          <li><Link href="/konto/auftraege" onClick={() => setOpen(false)}>{t("nav_auftraege")}</Link></li>
+          {isAdmin && <li><Link href="/admin" onClick={() => setOpen(false)}>{t("nav_admin")}</Link></li>}
+          <li><button type="button" onClick={onLogout}>{t("nav_logout")}</button></li>
         </ul>
       )}
     </div>
@@ -131,6 +133,7 @@ function AccountMenu({ session, isAdmin, onLogout }) {
 
 export default function Navbar() {
   const { session, loading, isAdmin } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   async function handleLogout() {
@@ -147,10 +150,10 @@ export default function Navbar() {
         </Link>
 
         <ul className="nav-links">
-          <li><Link href="/#rechner">Rechner</Link></li>
-          <li><Link href="/#leistungen">Leistungen</Link></li>
-          <li><Link href="/kundenstimmen">Kundenstimmen</Link></li>
-          <li><Link href="/ueber-uns">Über uns</Link></li>
+          <li><Link href="/#rechner">{t("nav_rechner")}</Link></li>
+          <li><Link href="/#leistungen">{t("nav_leistungen")}</Link></li>
+          <li><Link href="/kundenstimmen">{t("nav_kundenstimmen")}</Link></li>
+          <li><Link href="/ueber-uns">{t("nav_ueberuns")}</Link></li>
         </ul>
 
         <div className="nav-right">
@@ -163,8 +166,8 @@ export default function Navbar() {
             <AccountMenu session={session} isAdmin={isAdmin} onLogout={handleLogout} />
           ) : (
             <div className="auth-buttons">
-              <Link className="nav-cta ghost" href="/login">Log In</Link>
-              <Link className="nav-cta" href="/signup">Sign Up</Link>
+              <Link className="nav-cta ghost" href="/login">{t("nav_login")}</Link>
+              <Link className="nav-cta" href="/signup">{t("nav_signup")}</Link>
             </div>
           )}
         </div>

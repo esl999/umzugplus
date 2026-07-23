@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabaseClient";
 import { useAuth } from "../../../lib/useAuth";
+import StatusStepper from "../../../components/StatusStepper";
 
 const statusLabel = {
   neu: "Angebot",
@@ -195,6 +196,10 @@ export default function AuftragDetail() {
     <div className="admin-wrap">
       <div className="wrap">
         <h1 className="admin-title">Auftrag {order.booking_number}</h1>
+
+        <div style={{ maxWidth: 640, marginBottom: 24 }}>
+          <StatusStepper status={order.status} bezahlt={bezahlt} gesamt={gesamt} />
+        </div>
 
         <div className="calc-result" style={{ maxWidth: 640 }}>
           <div className="calc-result-head">Status: {statusLabel[order.status] || order.status}</div>
