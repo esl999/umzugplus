@@ -214,7 +214,9 @@ export default function AuftragDetail() {
 
           {d.grundpreis !== undefined && (
             <div style={{ padding: "0 20px 20px" }}>
-              <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 8 }}>Positionen</div>
+              <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 8 }}>
+                Positionen — {order.leistung === "entsorgung" ? "Entsorgung" : order.leistung === "reinigung" ? "Reinigung" : "Umzug"}
+              </div>
               <div className="belegzeile"><span>Grundpreis (Fixkosten)</span><span>{d.grundpreis.toFixed(2)} €</span></div>
               <div className="belegzeile"><span>{d.umfangLabel}</span><span>{d.umfang.toFixed(2)} €</span></div>
               {d.etagenzuschlag > 0 && (
@@ -223,8 +225,24 @@ export default function AuftragDetail() {
               {d.transport > 0 && (
                 <div className="belegzeile"><span>Transport: {d.km} km</span><span>{d.transport.toFixed(2)} €</span></div>
               )}
-              <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}><span>Netto</span><span>{d.netto?.toFixed(2)} €</span></div>
-              <div className="belegzeile"><span>zzgl. USt ({d.mwstSatz}%)</span><span>{d.mwstBetrag?.toFixed(2)} €</span></div>
+              {(d.montageAbbauSumme > 0) && <div className="belegzeile"><span>Möbel-Abbau</span><span>{d.montageAbbauSumme.toFixed(2)} €</span></div>}
+              {(d.montageEinbauSumme > 0) && <div className="belegzeile"><span>Möbel-Einbau</span><span>{d.montageEinbauSumme.toFixed(2)} €</span></div>}
+
+              {(d.extras || []).map((e, i) => (
+                <div key={i} style={{ marginTop: 14 }}>
+                  <div className="foot-heading" style={{ color: "var(--text)", marginBottom: 6 }}>
+                    Zusätzlich — {e.leistung === "entsorgung" ? "Entsorgung" : "Reinigung"} ({e.adresse?.slice(0, 30)})
+                  </div>
+                  <div className="belegzeile"><span>Grundpreis (Fixkosten)</span><span>{(e.grundpreis || 0).toFixed(2)} €</span></div>
+                  <div className="belegzeile"><span>{e.umfangLabel}</span><span>{(e.umfang || 0).toFixed(2)} €</span></div>
+                </div>
+              ))}
+
+              <div className="belegzeile" style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}>
+                <span>Netto gesamt</span>
+                <span>{((d.netto || 0) + (d.extras || []).reduce((s, e) => s + (e.netto || 0), 0)).toFixed(2)} €</span>
+              </div>
+              <div className="belegzeile"><span>zzgl. USt ({d.mwstSatz}%)</span><span>{((d.mwstBetrag || 0) + (d.extras || []).reduce((s, e) => s + (e.mwstBetrag || 0), 0)).toFixed(2)} €</span></div>
               <div className="belegzeile" style={{ fontWeight: 700 }}><span>Gesamt</span><span>{gesamt.toFixed(2)} €</span></div>
             </div>
           )}

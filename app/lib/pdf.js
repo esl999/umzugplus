@@ -7,9 +7,11 @@ const titles = {
   rechnung: "Rechnung",
 };
 
+const leistungNamen = { umzug: "Umzug", entsorgung: "Entsorgung", reinigung: "Reinigung" };
+
 export async function generateBelegPdf(order, type) {
   const doc = await PDFDocument.create();
-  const page = doc.addPage([595, 842]); // A4
+  let page = doc.addPage([595, 842]); // A4
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
@@ -23,11 +25,19 @@ export async function generateBelegPdf(order, type) {
   const right = 539;
   let y = 780;
 
+  function ensureSpace(needed) {
+    if (y - needed < 60) {
+      page = doc.addPage([595, 842]);
+      y = 780;
+    }
+  }
+
   function row(labelText, valueText, opts = {}) {
+    ensureSpace(opts.gap ?? 16);
     const size = opts.size ?? 10.5;
     const f = opts.bold ? bold : font;
     const color = opts.color ?? dark;
-    page.drawText(labelText, { x: left, y, size, font: f, color });
+    page.drawText(labelText, { x: opts.indent ?? left, y, size, font: f, color });
     if (valueText !== undefined) {
       const width = f.widthOfTextAtSize(valueText, size);
       page.drawText(valueText, { x: right - width, y, size, font: f, color });
@@ -36,11 +46,12 @@ export async function generateBelegPdf(order, type) {
   }
 
   function hr() {
+    ensureSpace(14);
     page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.6, color: line });
     y -= 14;
   }
 
-  // Kopfbereich: Logo-Look wie auf der Webseite (rot, fett, "UmzugPlus")
+  // Kopfbereich: Logo-Look wie auf der Webseite
   page.drawText("Umzug", { x: left, y, size: 19, font: bold, color: dark });
   const umzugWidth = bold.widthOfTextAtSize("Umzug", 19);
   page.drawText("Plus", { x: left + umzugWidth, y, size: 19, font: bold, color: red });
@@ -49,36 +60,38 @@ export async function generateBelegPdf(order, type) {
   page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 1.4, color: red });
   y -= 30;
 
-  // Titel + Referenz
   row(titles[type] || "Dokument", undefined, { bold: true, size: 15, gap: 20 });
   row(`Referenz: ${(titles[type] || "DOC").slice(0, 3).toUpperCase()}-${order.booking_number}`, undefined, { size: 9, color: faint, gap: 13 });
   row(`Datum: ${new Date(order.created_at).toLocaleDateString("de-DE")}`, undefined, { size: 9, color: faint, gap: 13 });
   if (order.wunschtermin) {
     row(`Leistungstermin: ${new Date(order.wunschtermin).toLocaleDateString("de-DE")}${order.wunschtermin_uhrzeit ? ", " + order.wunschtermin_uhrzeit + " Uhr" : ""}`, undefined, { size: 9, color: faint, gap: 13 });
   }
-  y -= 12;
+  y -= 8;
 
-  // Kunde & Leistung nebeneinander
-  const col2 = 320;
   page.drawText("KUNDE", { x: left, y, size: 8, font: bold, color: faint });
-  page.drawText("LEISTUNG", { x: col2, y, size: 8, font: bold, color: faint });
   y -= 14;
   page.drawText(order.name || order.email || "-", { x: left, y, size: 10, font, color: dark });
-  page.drawText(order.leistung === "entsorgung" ? "Entsorgung" : order.leistung === "reinigung" ? "Reinigung" : "Umzug", { x: col2, y, size: 10, font, color: dark });
-  y -= 14;
-  page.drawText(order.email || "", { x: left, y, size: 9, font, color: gray });
-  page.drawText(`Von: ${(order.von || "").slice(0, 32)}`, { x: col2, y, size: 9, font, color: gray });
   y -= 13;
-  if (order.nach) {
-    page.drawText(`Bis: ${order.nach.slice(0, 32)}`, { x: col2, y, size: 9, font, color: gray });
-    y -= 13;
-  }
+  page.drawText(order.email || "", { x: left, y, size: 9, font, color: gray });
   y -= 12;
   hr();
   y -= 4;
 
-  // Positionstabelle
   const d = order.preis_details || {};
+  const extras = d.extras || [];
+  const alleLeistungen = [order.leistung, ...extras.map((e) => e.leistung)];
+
+  page.drawText(
+    alleLeistungen.length > 1 ? `LEISTUNGEN: ${alleLeistungen.map((l) => leistungNamen[l] || l).join(" + ")}` : `LEISTUNG: ${leistungNamen[order.leistung] || order.leistung}`,
+    { x: left, y, size: 9, font: bold, color: faint }
+  );
+  y -= 20;
+
+  // --- Primäre Leistung ---
+  page.drawText(`${leistungNamen[order.leistung] || order.leistung}${order.von ? ` — ${order.von.slice(0, 40)}` : ""}`, { x: left, y, size: 11, font: bold, color: dark });
+  y -= 6;
+  hr();
+
   page.drawText("POSITION", { x: left, y, size: 8, font: bold, color: faint });
   page.drawText("BETRAG", { x: right - font.widthOfTextAtSize("BETRAG", 8), y, size: 8, font: bold, color: faint });
   y -= 16;
@@ -93,12 +106,28 @@ export async function generateBelegPdf(order, type) {
   if (d.montageAbbauSumme > 0) row("Möbel-Abbau", `${d.montageAbbauSumme.toFixed(2)} €`);
   if (d.montageEinbauSumme > 0) row("Möbel-Einbau", `${d.montageEinbauSumme.toFixed(2)} €`);
   if (d.rabattBetrag > 0) row("Rabattcode", `− ${d.rabattBetrag.toFixed(2)} €`);
+  row("Zwischensumme (netto)", `${(d.netto || 0).toFixed(2)} €`, { color: gray, gap: 18 });
+
+  // --- Zusätzliche Leistungen ---
+  extras.forEach((e) => {
+    y -= 8;
+    ensureSpace(60);
+    page.drawText(`${leistungNamen[e.leistung] || e.leistung}${e.adresse ? ` — ${e.adresse.slice(0, 40)}` : ""}`, { x: left, y, size: 11, font: bold, color: dark });
+    y -= 6;
+    hr();
+    row("Grundpreis (Fixkosten)", `${(e.grundpreis || 0).toFixed(2)} €`);
+    if (e.umfangLabel) row(e.umfangLabel, `${(e.umfang || 0).toFixed(2)} €`);
+    row("Zwischensumme (netto)", `${(e.netto || 0).toFixed(2)} €`, { color: gray, gap: 18 });
+  });
 
   y -= 4;
   hr();
 
-  row("Netto", `${(d.netto || 0).toFixed(2)} €`, { color: gray });
-  row(`zzgl. USt (${d.mwstSatz || 19}%)`, `${(d.mwstBetrag || 0).toFixed(2)} €`, { color: gray });
+  const nettoGesamt = (d.netto || 0) + extras.reduce((s, e) => s + (e.netto || 0), 0);
+  const mwstGesamt = (d.mwstBetrag || 0) + extras.reduce((s, e) => s + (e.mwstBetrag || 0), 0);
+
+  row("Netto gesamt", `${nettoGesamt.toFixed(2)} €`, { color: gray });
+  row(`zzgl. USt (${d.mwstSatz || 19}%)`, `${mwstGesamt.toFixed(2)} €`, { color: gray });
   y -= 4;
   hr();
 
@@ -112,6 +141,7 @@ export async function generateBelegPdf(order, type) {
   row("Restbetrag", `${rest.toFixed(2)} €`, { bold: true, color: rest > 0 ? red : dark });
 
   y -= 20;
+  ensureSpace(24);
   page.drawText(
     "Stornierung bis 12 Stunden vor dem Termin kostenlos. Danach wird der Grundpreis einbehalten",
     { x: left, y, size: 8, font, color: faint }

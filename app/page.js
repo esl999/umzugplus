@@ -388,6 +388,36 @@ export default function Home() {
     }
   }
 
+  function resetCalculator() {
+    setResult(null);
+    setSendSuccess(false);
+    setSendError("");
+    setVon("");
+    setNach("");
+    setObjektAdresse("");
+    setVonAufzug(false);
+    setNachAufzug(false);
+    setEtageVon("0");
+    setEtageNach("0");
+    setBerechnungsart("flaeche");
+    setFlaeche("");
+    setGegenstaende({});
+    setSelectedKategorie(null);
+    setZusatz({ moebelAbbau: false, moebelEinbau: false, verpackungsservice: false, halteverbotszone: false });
+    setMoebelAbbauItems({});
+    setMoebelEinbauItems({});
+    setMitarbeiter(2);
+    setZweitransporter(false);
+    setSonstiges("");
+    setRabattcodeInput("");
+    setWunschtermin("");
+    setWunschterminUhrzeit("09:00");
+    setWunschterminTag2("");
+    setComboExtras([]);
+    setComboFormLeistung(null);
+    rechnerRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
   async function handleSendRequest() {
     setSendError("");
 
@@ -402,13 +432,25 @@ export default function Home() {
 
     setSending(true);
     try {
-      const breakdown = computeBreakdown();
+      const primaryBreakdown = computeBreakdown();
 
-      if (breakdown.geschaetzteDauerStunden > 8 && !wunschterminTag2) {
+      if (primaryBreakdown.geschaetzteDauerStunden > 8 && !wunschterminTag2) {
         setSendError("Dieser Auftrag dauert voraussichtlich mehr als 8 Stunden. Bitte wähle zusätzlich einen zweiten Tag.");
         setSending(false);
         return;
       }
+
+      const extrasBruttoSumme = comboExtras.reduce((s, e) => s + e.brutto, 0);
+      const kombinierterGesamt = Math.round((primaryBreakdown.brutto + extrasBruttoSumme) * 100) / 100;
+      const kombinierteAnzahlung = Math.round(kombinierterGesamt * (prices.anzahlung.price / 100) * 100) / 100;
+
+      const kombiniertePreisDetails = {
+        ...primaryBreakdown,
+        primaryLeistung: leistung,
+        extras: comboExtras,
+        combinedBrutto: kombinierterGesamt,
+        anzahlung: kombinierteAnzahlung,
+      };
 
       const { data: newOrder, error: insertError } = await supabase
         .from("anfragen")
@@ -433,10 +475,10 @@ export default function Home() {
           wunschtermin: wunschtermin || null,
           wunschtermin_uhrzeit: wunschtermin ? wunschterminUhrzeit : null,
           wunschtermin_tag2: wunschterminTag2 || null,
-          geschaetzte_dauer_stunden: breakdown.geschaetzteDauerStunden,
+          geschaetzte_dauer_stunden: primaryBreakdown.geschaetzteDauerStunden,
           rabattcode: result.rabatt ? result.rabatt.code : null,
-          geschaetzter_preis: Math.round(breakdown.brutto * 100) / 100,
-          preis_details: breakdown,
+          geschaetzter_preis: kombinierterGesamt,
+          preis_details: kombiniertePreisDetails,
           bezahlt_betrag: 0,
           name: name.trim(),
           email: contactEmail || session.user.email,
@@ -453,43 +495,6 @@ export default function Home() {
         body: JSON.stringify({ anfrageId: newOrder.id, type: "angebot" }),
       }).catch(() => {});
 
-      if (comboExtras.length > 0) {
-        const extraRows = comboExtras.map((e) => ({
-          user_id: session.user.id,
-          kundentyp,
-          leistung: e.leistung,
-          von: e.adresse,
-          objekt_adresse: e.adresse,
-          entfernung_km: 0,
-          etage_von: "0",
-          etage_nach: "0",
-          aufzug_von: false,
-          aufzug_nach: false,
-          berechnungsart: "flaeche",
-          flaeche: e.flaeche,
-          mitarbeiter: 2,
-          kapazitaet_bedarf: 1,
-          wunschtermin: wunschtermin || null,
-          wunschtermin_uhrzeit: wunschtermin ? wunschterminUhrzeit : null,
-          geschaetzter_preis: Math.round(e.brutto * 100) / 100,
-          preis_details: e,
-          bezahlt_betrag: 0,
-          name: name.trim(),
-          email: contactEmail || session.user.email,
-          telefon: telefon.trim(),
-          kombi_referenz: newOrder.id,
-        }));
-        const { data: extraOrders } = await supabase.from("anfragen").insert(extraRows).select();
-        (extraOrders || []).forEach((eo) => {
-          fetch("/api/email/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ anfrageId: eo.id, type: "angebot" }),
-          }).catch(() => {});
-        });
-        await supabase.from("anfragen").update({ kombi_referenz: newOrder.id }).eq("id", newOrder.id);
-      }
-
       setSendSuccess(true);
     } catch (err) {
       setSendError("Die Anfrage konnte nicht gesendet werden. Bitte versuch es erneut.");
@@ -500,8 +505,12 @@ export default function Home() {
 
   const [comboExtras, setComboExtras] = useState([]);
   const [comboFormLeistung, setComboFormLeistung] = useState(null);
+  const [comboAddressChoice, setComboAddressChoice] = useState(null);
   const [comboFormAdresse, setComboFormAdresse] = useState("");
+  const [comboFormArt, setComboFormArt] = useState("flaeche");
   const [comboFormFlaeche, setComboFormFlaeche] = useState("");
+  const [comboFormKategorie, setComboFormKategorie] = useState(null);
+  const [comboFormItems, setComboFormItems] = useState({});
   const [comboLoading, setComboLoading] = useState(false);
   const [comboError, setComboError] = useState("");
 
@@ -509,26 +518,65 @@ export default function Home() {
 
   function openComboForm(target) {
     setComboFormLeistung(target);
-    setComboFormAdresse(leistung === "umzug" ? nach : objektAdresse);
+    setComboAddressChoice(leistung === "umzug" ? null : "auto");
+    setComboFormAdresse(leistung === "umzug" ? "" : objektAdresse);
+    setComboFormArt("flaeche");
     setComboFormFlaeche("");
+    setComboFormKategorie(null);
+    setComboFormItems({});
     setComboError("");
   }
 
-  function computeExtraBreakdown(target, flaecheWert) {
+  function chooseComboAddress(which) {
+    setComboAddressChoice(which);
+    setComboFormAdresse(which === "start" ? von : nach);
+  }
+
+  function changeComboItemQty(id, delta) {
+    setComboFormItems((prev) => {
+      const next = Math.max(0, (prev[id] || 0) + delta);
+      return { ...prev, [id]: next };
+    });
+  }
+
+  function computeExtraBreakdown(target, art, flaecheWert, itemsAuswahl) {
     const grundpreis = target === "entsorgung" ? prices.grundpreisEntsorgung.price : prices.grundpreisReinigung.price;
     const proQm = target === "entsorgung" ? prices.proQmEntsorgung.price : prices.proQmReinigung.price;
-    const umfang = (Number(flaecheWert) || 0) * proQm;
+
+    let umfang = 0;
+    let umfangLabel = "";
+    let itemLabels = [];
+    if (art === "flaeche") {
+      umfang = (Number(flaecheWert) || 0) * proQm;
+      umfangLabel = `Fläche: ${flaecheWert || 0} m² × ${proQm.toFixed(2)} €/m²`;
+    } else {
+      const relevantKatalog = katalog.filter((i) => (target === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ === "moebel"));
+      const priceField = target === "entsorgung" ? "preis_entsorgung" : "preis";
+      relevantKatalog.forEach((item) => {
+        const qty = itemsAuswahl[item.id] || 0;
+        if (qty > 0) {
+          umfang += qty * (item[priceField] || 0);
+          itemLabels.push(`${qty}× ${item.name}`);
+        }
+      });
+      umfangLabel = itemLabels.length > 0 ? itemLabels.join(", ") : "Einzelne Positionen";
+    }
+
     let netto = grundpreis + umfang;
     if (kundentyp === "gewerbe") netto = netto * (1 - prices.rabattGewerbe.price / 100);
     const brutto = netto * (1 + prices.mwst.price / 100);
     const gesamt = Math.max(brutto, prices.mindestauftragswert.price);
-    return { leistung: target, grundpreis, umfang, flaeche: Number(flaecheWert) || 0, proQm, netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt };
+    return { leistung: target, grundpreis, umfang, umfangLabel, flaeche: art === "flaeche" ? Number(flaecheWert) || 0 : null, berechnungsart: art, netto, mwstSatz: prices.mwst.price, mwstBetrag: brutto - netto, brutto: gesamt };
   }
 
   async function submitComboForm() {
     setComboError("");
-    if (!comboFormAdresse.trim() || !comboFormFlaeche) {
-      setComboError("Bitte Adresse und Fläche angeben.");
+    if (!comboFormAdresse.trim()) {
+      setComboError("Bitte eine Adresse angeben oder auswählen.");
+      return;
+    }
+    if (comboFormArt === "flaeche" && !comboFormFlaeche) {
+      setComboError("Bitte eine Fläche angeben.");
       return;
     }
     setComboLoading(true);
@@ -539,7 +587,7 @@ export default function Home() {
         setComboLoading(false);
         return;
       }
-      const extraBreakdown = computeExtraBreakdown(comboFormLeistung, comboFormFlaeche);
+      const extraBreakdown = computeExtraBreakdown(comboFormLeistung, comboFormArt, comboFormFlaeche, comboFormItems);
       setComboExtras((prev) => [...prev, { ...extraBreakdown, adresse: comboFormAdresse }]);
       setComboFormLeistung(null);
     } catch {
@@ -942,16 +990,60 @@ export default function Home() {
                           <p style={{ fontSize: 13, marginBottom: 10, fontWeight: 600 }}>
                             {leistungLabelMap[comboFormLeistung]} — Details
                           </p>
-                          <div className="calc-row-3">
-                            <div className="field" style={{ gridColumn: "span 2" }}>
-                              <label>Objekt-Adresse (NRW)</label>
-                              <input type="text" value={comboFormAdresse} onChange={(e) => setComboFormAdresse(e.target.value)} placeholder="Adresse eingeben" />
+
+                          {leistung === "umzug" && (
+                            <div className="field" style={{ marginBottom: 12 }}>
+                              <label>Welche Adresse soll verwendet werden?</label>
+                              <div className="btn-row">
+                                <button type="button" className={"btn ghost" + (comboAddressChoice === "start" ? " active-outline" : "")} onClick={() => chooseComboAddress("start")}>{t("btn_start")}</button>
+                                <button type="button" className={"btn ghost" + (comboAddressChoice === "ziel" ? " active-outline" : "")} onClick={() => chooseComboAddress("ziel")}>{t("btn_ziel")}</button>
+                                <button type="button" className={"btn ghost" + (comboAddressChoice === "neu" ? " active-outline" : "")} onClick={() => { setComboAddressChoice("neu"); setComboFormAdresse(""); }}>Andere Adresse</button>
+                              </div>
                             </div>
-                            <div className="field">
+                          )}
+
+                          <div className="field" style={{ marginBottom: 12 }}>
+                            <label>Objekt-Adresse (NRW)</label>
+                            <input type="text" value={comboFormAdresse} onChange={(e) => setComboFormAdresse(e.target.value)} placeholder="Adresse eingeben" />
+                          </div>
+
+                          <div className="field" style={{ marginBottom: 12 }}>
+                            <label>Wie möchtest du berechnen?</label>
+                            <div className="segmented" style={{ maxWidth: 320 }}>
+                              <button type="button" className={comboFormArt === "flaeche" ? "active" : ""} onClick={() => setComboFormArt("flaeche")}>Gesamtfläche</button>
+                              <button type="button" className={comboFormArt === "positionen" ? "active" : ""} onClick={() => setComboFormArt("positionen")}>Einzeln</button>
+                            </div>
+                          </div>
+
+                          {comboFormArt === "flaeche" ? (
+                            <div className="field" style={{ maxWidth: 200, marginBottom: 12 }}>
                               <label>Fläche (m²)</label>
                               <input type="number" min="0" value={comboFormFlaeche} onChange={(e) => setComboFormFlaeche(e.target.value)} />
                             </div>
-                          </div>
+                          ) : (
+                            <div style={{ marginBottom: 12 }}>
+                              <div className="kategorie-tabs" style={{ marginBottom: 10 }}>
+                                {[...new Set(katalog.filter((i) => (comboFormLeistung === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ === "moebel")).map((i) => i.kategorie))].map((k) => (
+                                  <button type="button" key={k} className={"kategorie-tab" + (comboFormKategorie === k ? " active" : "")} onClick={() => setComboFormKategorie(k)}>{k}</button>
+                                ))}
+                              </div>
+                              {comboFormKategorie && (
+                                <div className="items-grid">
+                                  {katalog.filter((i) => i.kategorie === comboFormKategorie && (comboFormLeistung === "reinigung" ? i.leistung_typ === "reinigung" : i.leistung_typ === "moebel")).map((item) => (
+                                    <div className="item-row" key={item.id}>
+                                      <span>{item.name}</span>
+                                      <div className="qty-control">
+                                        <button type="button" className="qty-btn" onClick={() => changeComboItemQty(item.id, -1)}>−</button>
+                                        <span className="qty-value">{comboFormItems[item.id] || 0}</span>
+                                        <button type="button" className="qty-btn" onClick={() => changeComboItemQty(item.id, 1)}>+</button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <div className="btn-row" style={{ marginTop: 10 }}>
                             <button type="button" className="btn primary" disabled={comboLoading} onClick={submitComboForm}>
                               {comboLoading ? "Berechne…" : "Preis hinzufügen"}
@@ -967,8 +1059,13 @@ export default function Home() {
                   <div className="contact-box">
                     <div className="contact-title">{t("contact_title")}</div>
                     {sendSuccess ? (
-                      <div className="send-success">
-                        Danke! Deine Anfrage{comboExtras.length > 0 ? "n sind" : " ist"} eingegangen — du findest{comboExtras.length > 0 ? " sie" : " sie"} ab sofort unter „Meine Aufträge".
+                      <div>
+                        <div className="send-success">
+                          Danke! Deine Anfrage{comboExtras.length > 0 ? "n sind" : " ist"} eingegangen — du findest{comboExtras.length > 0 ? " sie" : " sie"} ab sofort unter „Meine Aufträge".
+                        </div>
+                        <button type="button" className="btn primary" style={{ marginTop: 14 }} onClick={resetCalculator}>
+                          Neue Berechnung starten
+                        </button>
                       </div>
                     ) : !session ? (
                       <>

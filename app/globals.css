@@ -2075,6 +2075,12 @@ button.nav-cta {
   margin-top: 14px;
 }
 
+.btn.ghost.active-outline {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-soft);
+}
+
 /* ---------- Services ---------- */
 
 section.services {
