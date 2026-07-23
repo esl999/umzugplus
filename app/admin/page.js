@@ -29,6 +29,7 @@ export default function AdminPage() {
   const [kunden, setKunden] = useState([]);
   const [preise, setPreise] = useState([]);
   const [beschwerden, setBeschwerden] = useState([]);
+  const [bewertungen, setBewertungen] = useState([]);
   const [logs, setLogs] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -47,17 +48,19 @@ export default function AdminPage() {
 
   async function loadAll() {
     setDataLoading(true);
-    const [a, k, p, b, l] = await Promise.all([
+    const [a, k, p, b, l, bw] = await Promise.all([
       supabase.from("anfragen").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("price_settings").select("*").order("label"),
       supabase.from("beschwerden").select("*").order("updated_at", { ascending: false }),
       supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(50),
+      supabase.from("bewertungen").select("*").order("created_at", { ascending: false }),
     ]);
     setAnfragen(a.data || []);
     setKunden(k.data || []);
     setPreise((p.data || []).map((row) => ({ ...row, _draft: row.price })));
     setBeschwerden(b.data || []);
+    setBewertungen(bw.data || []);
     setLogs(l.data || []);
     setDataLoading(false);
   }
@@ -151,6 +154,7 @@ export default function AdminPage() {
           <button className={tab === "preise" ? "active" : ""} onClick={() => setTab("preise")}>Katalog &amp; Preise</button>
           <button className={tab === "kunden" ? "active" : ""} onClick={() => setTab("kunden")}>Nutzer</button>
           <button className={tab === "beschwerden" ? "active" : ""} onClick={() => setTab("beschwerden")}>Beschwerden</button>
+          <button className={tab === "bewertungen" ? "active" : ""} onClick={() => setTab("bewertungen")}>Bewertungen</button>
           <button className={tab === "logs" ? "active" : ""} onClick={() => setTab("logs")}>Logs</button>
         </div>
 
@@ -276,6 +280,14 @@ export default function AdminPage() {
             {tab === "beschwerden" && (
               <AdminBeschwerden
                 beschwerden={beschwerden}
+                actorEmail={session.user.email}
+                onChanged={loadAll}
+              />
+            )}
+
+            {tab === "bewertungen" && (
+              <AdminBewertungen
+                bewertungen={bewertungen}
                 actorEmail={session.user.email}
                 onChanged={loadAll}
               />
@@ -909,6 +921,75 @@ function PaymentCell({ order, actorEmail, onUpdated }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminBewertungen({ bewertungen, actorEmail, onChanged }) {
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [busyId, setBusyId] = useState(null);
+
+  async function saveReply(id) {
+    setBusyId(id);
+    await supabase.from("bewertungen").update({ admin_antwort: replyDrafts[id] || "" }).eq("id", id);
+    await logAction(actorEmail, "bewertung.antwort", id);
+    onChanged();
+    setBusyId(null);
+  }
+
+  async function toggleSichtbar(b) {
+    setBusyId(b.id);
+    await supabase.from("bewertungen").update({ sichtbar: !b.sichtbar }).eq("id", b.id);
+    await logAction(actorEmail, b.sichtbar ? "bewertung.ausgeblendet" : "bewertung.eingeblendet", b.id);
+    onChanged();
+    setBusyId(null);
+  }
+
+  async function deleteBewertung(id) {
+    if (!confirm("Diese Bewertung wirklich löschen?")) return;
+    setBusyId(id);
+    await supabase.from("bewertungen").delete().eq("id", id);
+    await logAction(actorEmail, "bewertung.geloescht", id);
+    onChanged();
+    setBusyId(null);
+  }
+
+  if (bewertungen.length === 0) return <p className="auth-sub">Noch keine Bewertungen vorhanden.</p>;
+
+  return (
+    <div style={{ display: "grid", gap: 18 }}>
+      {bewertungen.map((b) => (
+        <div key={b.id} className="calc-result" style={{ opacity: b.sichtbar ? 1 : 0.55 }}>
+          <div className="calc-result-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="sterne-anzeige">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <span key={i} className={i <= b.sterne ? "stern voll" : "stern leer"}>★</span>
+              ))}
+            </span>
+            <span className="admin-sub">{new Date(b.created_at).toLocaleDateString("de-DE")} · {b.sichtbar ? "sichtbar" : "ausgeblendet"}</span>
+          </div>
+          <div style={{ padding: 20 }}>
+            {b.text && <p style={{ fontSize: 14, marginBottom: 10 }}>{b.text}</p>}
+            {b.bild_url && <img src={b.bild_url} alt="Bewertungsbild" style={{ maxWidth: 180, borderRadius: 10, marginBottom: 10 }} />}
+
+            <textarea
+              rows={2}
+              placeholder="Antwort auf diese Bewertung…"
+              defaultValue={b.admin_antwort || ""}
+              onChange={(e) => setReplyDrafts((d) => ({ ...d, [b.id]: e.target.value }))}
+              style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid var(--border)", fontFamily: "inherit" }}
+            />
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <button className="small-btn" disabled={busyId === b.id} onClick={() => saveReply(b.id)}>Antwort speichern</button>
+              <button className="small-btn" disabled={busyId === b.id} onClick={() => toggleSichtbar(b)}>
+                {b.sichtbar ? "Ausblenden" : "Einblenden"}
+              </button>
+              <button className="small-btn danger" disabled={busyId === b.id} onClick={() => deleteBewertung(b.id)}>Löschen</button>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

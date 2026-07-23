@@ -47,6 +47,13 @@ export default function AuftragDetail() {
   const [sending, setSending] = useState(false);
   const [showComplaintForm, setShowComplaintForm] = useState(false);
 
+  const [bewertung, setBewertung] = useState(null);
+  const [sterne, setSterne] = useState(0);
+  const [bewertungText, setBewertungText] = useState("");
+  const [bewertungBild, setBewertungBild] = useState(null);
+  const [savingBewertung, setSavingBewertung] = useState(false);
+  const [bewertungError, setBewertungError] = useState("");
+
   const [payStep, setPayStep] = useState(null);
   const [payChoice, setPayChoice] = useState(null);
   const [payNote, setPayNote] = useState("");
@@ -80,6 +87,14 @@ export default function AuftragDetail() {
         .order("created_at", { ascending: true });
       setMessages(msgs || []);
     }
+
+    const { data: bw } = await supabase
+      .from("bewertungen")
+      .select("*")
+      .eq("anfrage_id", params.id)
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    setBewertung(bw || null);
     setLoadingOrder(false);
   }
 
@@ -90,6 +105,44 @@ export default function AuftragDetail() {
     await supabase.from("anfragen").update({ status: "storniert", storniert_at: now }).eq("id", order.id);
     setOrder({ ...order, status: "storniert", storniert_at: now });
     setCanceling(false);
+  }
+
+  async function submitBewertung() {
+    setBewertungError("");
+    if (sterne === 0) {
+      setBewertungError("Bitte wähle eine Sternebewertung aus.");
+      return;
+    }
+    setSavingBewertung(true);
+    try {
+      let bildUrl = null;
+      if (bewertungBild) {
+        const path = `${order.id}/${Date.now()}-${bewertungBild.name}`;
+        const { error: uploadError } = await supabase.storage.from("bewertungen").upload(path, bewertungBild);
+        if (uploadError) throw uploadError;
+        const { data: pub } = supabase.storage.from("bewertungen").getPublicUrl(path);
+        bildUrl = pub.publicUrl;
+      }
+
+      const { data, error: insertError } = await supabase
+        .from("bewertungen")
+        .insert({
+          anfrage_id: order.id,
+          user_id: session.user.id,
+          sterne,
+          text: bewertungText.trim() || null,
+          bild_url: bildUrl,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      setBewertung(data);
+    } catch (err) {
+      setBewertungError("Die Bewertung konnte nicht gespeichert werden. Bitte versuch es erneut.");
+    } finally {
+      setSavingBewertung(false);
+    }
   }
 
   async function startComplaint() {
@@ -288,6 +341,74 @@ export default function AuftragDetail() {
               >
                 {sending ? "Sende…" : "Senden"}
               </button>
+            </>
+          )}
+        </div>
+
+        <div className="contact-box" style={{ maxWidth: 640, marginTop: 32 }}>
+          <div className="contact-title">Deine Bewertung</div>
+
+          {bewertung ? (
+            <div>
+              <div className="sterne-anzeige" style={{ marginBottom: 8 }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <span key={i} className={i <= bewertung.sterne ? "stern voll" : "stern leer"}>★</span>
+                ))}
+              </div>
+              {bewertung.text && <p style={{ fontSize: 14, color: "var(--text-dim)" }}>{bewertung.text}</p>}
+              {bewertung.bild_url && (
+                <img src={bewertung.bild_url} alt="Dein Bild" style={{ maxWidth: 200, borderRadius: 10, marginTop: 8 }} />
+              )}
+              {bewertung.admin_antwort && (
+                <div style={{ background: "var(--bg-soft)", borderRadius: 10, padding: 12, marginTop: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--red)", marginBottom: 4 }}>Antwort von UmzugPlus</div>
+                  <p style={{ fontSize: 13.5, color: "var(--text-dim)" }}>{bewertung.admin_antwort}</p>
+                </div>
+              )}
+              <p className="mini-note" style={{ marginTop: 10 }}>Danke für deine Bewertung!</p>
+            </div>
+          ) : (
+            <>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label>Sterne</label>
+                <div className="sterne-auswahl">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className={i <= sterne ? "stern voll" : "stern leer"}
+                      onClick={() => setSterne(i)}
+                      aria-label={`${i} Sterne`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="bewertungText">Deine Erfahrung (optional)</label>
+                <textarea
+                  id="bewertungText"
+                  rows={3}
+                  placeholder="Wie war dein Umzug/deine Entsorgung/Reinigung?"
+                  value={bewertungText}
+                  onChange={(e) => setBewertungText(e.target.value)}
+                  style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid var(--border)", fontFamily: "inherit" }}
+                />
+              </div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="bewertungBild">Foto hochladen (optional)</label>
+                <input
+                  id="bewertungBild"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setBewertungBild(e.target.files?.[0] || null)}
+                />
+              </div>
+              <button className="btn primary" disabled={savingBewertung} onClick={submitBewertung}>
+                {savingBewertung ? "Speichere…" : "Bewertung abschicken"}
+              </button>
+              {bewertungError && <div className="calc-error">{bewertungError}</div>}
             </>
           )}
         </div>

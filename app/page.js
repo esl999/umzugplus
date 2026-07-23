@@ -728,28 +728,38 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="services" id="leistungen">
+      <section className="services-stack" id="leistungen">
         <div className="wrap">
           <div className="section-title">
             <h2>Drei Leistungen, ein transparenter Preis</h2>
             <p>Berechne wahlweise nach Fläche (m²) oder nach einzelnen Positionen.</p>
           </div>
-          <div className="service-grid">
-            <div className="service-card">
-              <div className="service-icon yellow" />
-              <h3>Umzug</h3>
-              <p>Privat- oder Firmenumzug — inklusive Entfernung &amp; Etagen.</p>
-            </div>
-            <div className="service-card">
-              <div className="service-icon red" />
-              <h3>Entsorgung</h3>
-              <p>Entrümpelung &amp; Haushaltsauflösung, fachgerecht entsorgt.</p>
-            </div>
-            <div className="service-card">
-              <div className="service-icon yellow" />
-              <h3>Reinigung</h3>
-              <p>Übergabereinigung beim Auszug — sauber und mängelfrei abgeben.</p>
-            </div>
+        </div>
+
+        <div className="service-band service-band-umzug" onClick={() => scrollToRechner("umzug")}>
+          <div className="wrap service-band-inner">
+            <span className="service-band-icon">🚚</span>
+            <h3>Umzug</h3>
+            <p>Privat- oder Firmenumzug — inklusive Entfernung &amp; Etagen.</p>
+            <span className="service-band-cta">Preis berechnen →</span>
+          </div>
+        </div>
+
+        <div className="service-band service-band-entsorgung" onClick={() => scrollToRechner("entsorgung")}>
+          <div className="wrap service-band-inner">
+            <span className="service-band-icon">♻️</span>
+            <h3>Entsorgung</h3>
+            <p>Entrümpelung &amp; Haushaltsauflösung, fachgerecht entsorgt.</p>
+            <span className="service-band-cta">Preis berechnen →</span>
+          </div>
+        </div>
+
+        <div className="service-band service-band-reinigung" onClick={() => scrollToRechner("reinigung")}>
+          <div className="wrap service-band-inner">
+            <span className="service-band-icon">✨</span>
+            <h3>Reinigung</h3>
+            <p>Übergabereinigung beim Auszug — sauber und mängelfrei abgeben.</p>
+            <span className="service-band-cta">Preis berechnen →</span>
           </div>
         </div>
       </section>
@@ -784,6 +794,20 @@ function Footer() {
           <div className="foot-heading">Kontakt</div>
           <a href="/ueber-uns">Über uns</a>
           <a href="mailto:info@umzugplus.de">info@umzugplus.de</a>
+          <div className="social-row">
+            <a href="https://instagram.com/umzugplus" target="_blank" rel="noreferrer" aria-label="Instagram">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" strokeWidth="1.6"/><circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor"/></svg>
+            </a>
+            <a href="https://tiktok.com/@umzugplus" target="_blank" rel="noreferrer" aria-label="TikTok">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 3v10.2a3.3 3.3 0 1 1-2.4-3.18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M14 3c.4 2.4 2.2 4.2 4.6 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            </a>
+            <a href="https://facebook.com/umzugplus" target="_blank" rel="noreferrer" aria-label="Facebook">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" stroke="currentColor" strokeWidth="1.6"/><path d="M13.5 21v-6.5H16l.4-3H13.5v-1.8c0-1 .3-1.7 1.7-1.7H16V5.3c-.3 0-1.2-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8v2.1H8v3h2.1V21" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+            </a>
+            <a href="https://youtube.com/@umzugplus" target="_blank" rel="noreferrer" aria-label="YouTube">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2.5" y="6" width="19" height="12" rx="3.5" stroke="currentColor" strokeWidth="1.6"/><path d="M10.5 9.6v4.8l4.3-2.4-4.3-2.4Z" fill="currentColor"/></svg>
+            </a>
+          </div>
         </div>
       </div>
       <div className="wrap footer-bottom">

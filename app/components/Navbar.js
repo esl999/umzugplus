@@ -24,6 +24,7 @@ export default function Navbar() {
         <ul className="nav-links">
           <li><Link href="/#rechner">Rechner</Link></li>
           <li><Link href="/#leistungen">Leistungen</Link></li>
+          <li><Link href="/kundenstimmen">Kundenstimmen</Link></li>
           <li><Link href="/ueber-uns">Über uns</Link></li>
           <li><a href="#footer-kontakt">Kontakt</a></li>
           {isAdmin && <li><Link href="/admin">Admin</Link></li>}

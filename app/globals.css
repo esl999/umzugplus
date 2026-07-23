@@ -1430,6 +1430,133 @@ button.nav-cta {
   }
 }
 
+/* ---------- Leistungs-Banner (gestapelt, mit Farbthema) ---------- */
+
+.services-stack {
+  padding: 60px 0 0;
+  background: var(--bg-soft);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.services-stack .section-title {
+  padding-bottom: 20px;
+}
+
+.service-band {
+  position: relative;
+  padding: 56px 0;
+  cursor: pointer;
+  color: white;
+  overflow: hidden;
+  transition: filter 0.15s ease;
+}
+
+.service-band:hover {
+  filter: brightness(1.05);
+}
+
+.service-band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.07) 0 2px, transparent 2px 16px);
+  pointer-events: none;
+}
+
+.service-band-umzug { background: linear-gradient(120deg, #E08A34, #B95F12); }
+.service-band-entsorgung { background: linear-gradient(120deg, #4FA873, #2C7A50); }
+.service-band-reinigung { background: linear-gradient(120deg, #4C8FD9, #2C5FA8); }
+
+.service-band-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+}
+
+.service-band-icon {
+  font-size: 30px;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+
+.service-band h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.service-band p {
+  font-size: 15px;
+  opacity: 0.92;
+  max-width: 440px;
+}
+
+.service-band-cta {
+  display: inline-block;
+  margin-top: 18px;
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 2px solid rgba(255,255,255,0.6);
+  padding-bottom: 2px;
+}
+
+.social-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.social-row a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #b8b2a2;
+  margin-bottom: 0;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.social-row a:hover {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+
+.sterne-anzeige, .sterne-auswahl {
+  display: flex;
+  gap: 4px;
+}
+
+.sterne-auswahl button {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sterne-anzeige .stern,
+.sterne-auswahl .stern {
+  font-size: 20px;
+}
+
+.sterne-auswahl .stern {
+  font-size: 26px;
+}
+
+.stern.voll {
+  color: var(--yellow);
+}
+
+.stern.leer {
+  color: var(--border);
+}
+
 /* ---------- Services ---------- */
 
 section.services {
